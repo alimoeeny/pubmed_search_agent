@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"time"
 
 	"google.golang.org/adk/agent"
 	"google.golang.org/adk/agent/llmagent"
@@ -19,9 +20,6 @@ import (
 	"github.com/alimoeeny/pubmed_search_agent/pubmed"
 	agenttools "github.com/alimoeeny/pubmed_search_agent/tools"
 )
-
-// sessionKeyFetchedPMIDs is the session-state key for the set of fetched PMIDs.
-const sessionKeyFetchedPMIDs = "fetched_pmids"
 
 func main() {
 	ctx := context.Background()
@@ -56,7 +54,7 @@ func main() {
 	}
 	pubmedClient := pubmed.NewClient(pubmed.ClientConfig{
 		Email:      ncbiEmail,
-		HTTPClient: &http.Client{Transport: crt},
+		HTTPClient: &http.Client{Transport: crt, Timeout: 30 * time.Second},
 	})
 	defer pubmedClient.Close()
 
@@ -91,7 +89,7 @@ func main() {
 		}
 
 		// Retrieve allowed PMID set from session state.
-		raw, _ := ctx.State().Get(sessionKeyFetchedPMIDs)
+		raw, _ := ctx.State().Get(agenttools.SessionKeyFetchedPMIDs)
 		allowed := guard.PMIDSet(toStringSlice(raw))
 
 		sanitized := guard.StripHallucinatedPMIDs(resp.Content, allowed)
@@ -160,9 +158,10 @@ const agentInstruction = `You are a PubMed research assistant. Follow these step
 4. FETCH: Call pubmed_fetch_details on the top PMIDs (up to 20).
 
 5. SUMMARIZE: Write a concise human-readable answer grounded in the fetched abstracts.
-   - Cite every factual claim inline as [PMID:XXXXXXXX].
+   - Cite every factual claim inline as [PMID:XXXXXXXX](https://pubmed.ncbi.nlm.nih.gov/XXXXXXXX/)
+     (replace XXXXXXXX with the actual PMID number in both places).
    - End with a "**References**" section listing each cited paper as:
-     - [XXXXXXXX] Title — *Journal*, YYYY-MM-DD
+     - [[XXXXXXXX](https://pubmed.ncbi.nlm.nih.gov/XXXXXXXX/)] Title — *Journal*, YYYY-MM-DD
    - Do NOT invent PMIDs, titles, or findings. Only cite PMIDs returned by pubmed_fetch_details.
    - If the abstracts do not contain enough information to answer the question, say so clearly.
 

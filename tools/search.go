@@ -2,7 +2,6 @@
 package tools
 
 import (
-	"context"
 	"fmt"
 
 	"google.golang.org/adk/tool"
@@ -13,11 +12,12 @@ import (
 
 // SearchArgs is the input for the pubmed_search tool.
 type SearchArgs struct {
-	BooleanQuery string            `json:"boolean_query"`
-	MeshTerms    []string          `json:"mesh_terms,omitempty"`
-	Filters      pubmed.Filters    `json:"filters,omitempty"`
-	SortOrder    pubmed.SortOrder  `json:"sort_order,omitempty"`
-	Rationale    string            `json:"rationale,omitempty"`
+	BooleanQuery string           `json:"boolean_query"`
+	MeshTerms    []string         `json:"mesh_terms,omitempty"`
+	Filters      pubmed.Filters   `json:"filters,omitempty"`
+	SortOrder    pubmed.SortOrder `json:"sort_order,omitempty"`
+	Rationale    string           `json:"rationale,omitempty"`
+	MaxResults   int              `json:"max_results,omitempty"` // 0 = default 100
 }
 
 // SearchResult is the output for the pubmed_search tool.
@@ -36,8 +36,9 @@ func NewPubmedSearchTool(client *pubmed.Client) (tool.Tool, error) {
 			Filters:      args.Filters,
 			SortOrder:    args.SortOrder,
 			Rationale:    args.Rationale,
+			MaxResults:   args.MaxResults,
 		}
-		result, err := client.ESearch(context.Background(), plan)
+		result, err := client.ESearch(ctx, plan)
 		if err != nil {
 			return SearchResult{}, fmt.Errorf("pubmed_search: %w", err)
 		}

@@ -75,7 +75,11 @@ func (c *Client) ESearch(ctx context.Context, plan QueryPlan) (*SearchResult, er
 	q := url.Values{}
 	q.Set("db", "pubmed")
 	q.Set("term", term)
-	q.Set("retmax", fmt.Sprintf("%d", defaultRetMax))
+	retMax := defaultRetMax
+	if plan.MaxResults > 0 {
+		retMax = plan.MaxResults
+	}
+	q.Set("retmax", fmt.Sprintf("%d", retMax))
 	q.Set("usehistory", "y")
 	q.Set("retmode", "json")
 	if plan.SortOrder != "" {

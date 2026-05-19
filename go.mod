@@ -4,6 +4,7 @@ go 1.26.3
 
 require (
 	github.com/cenkalti/backoff/v5 v5.0.3
+	golang.org/x/sync v0.20.0
 	google.golang.org/adk v1.2.0
 	google.golang.org/genai v1.57.0
 )
@@ -48,7 +49,6 @@ require (
 	golang.org/x/crypto v0.49.0 // indirect
 	golang.org/x/net v0.52.0 // indirect
 	golang.org/x/oauth2 v0.36.0 // indirect
-	golang.org/x/sync v0.20.0 // indirect
 	golang.org/x/sys v0.42.0 // indirect
 	golang.org/x/text v0.35.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20260316180232-0b37fe3546d5 // indirect

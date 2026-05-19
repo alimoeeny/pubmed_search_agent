@@ -67,6 +67,45 @@ func TestStripHallucinatedPMIDs_EmptyAllowed(t *testing.T) {
 	}
 }
 
+func TestStripHallucinatedPMIDs_LinkedFormat(t *testing.T) {
+	allowed := PMIDSet([]string{"12345678"})
+	content := &genai.Content{
+		Role: "model",
+		Parts: []*genai.Part{
+			{Text: "Real [PMID:12345678](https://pubmed.ncbi.nlm.nih.gov/12345678/) and fake [PMID:99999999](https://pubmed.ncbi.nlm.nih.gov/99999999/)."},
+		},
+	}
+
+	result := StripHallucinatedPMIDs(content, allowed)
+
+	text := result.Parts[0].Text
+	if strings.Contains(text, "[PMID:99999999]") {
+		t.Errorf("hallucinated linked citation tag still present in: %q", text)
+	}
+	if strings.Contains(text, "pubmed.ncbi.nlm.nih.gov/99999999") {
+		t.Errorf("hallucinated URL still present in: %q", text)
+	}
+	if !strings.Contains(text, "[PMID:12345678](https://pubmed.ncbi.nlm.nih.gov/12345678/)") {
+		t.Errorf("real linked PMID was incorrectly stripped from: %q", text)
+	}
+	if !strings.Contains(text, "citation removed") {
+		t.Errorf("expected 'citation removed' placeholder in: %q", text)
+	}
+}
+
+func TestExtractPMIDs_LinkedFormat(t *testing.T) {
+	text := "See [PMID:111](https://pubmed.ncbi.nlm.nih.gov/111/) and [PMID:222](https://pubmed.ncbi.nlm.nih.gov/222/). Also plain [PMID:333]."
+	pmids := ExtractPMIDs(text)
+	if len(pmids) != 3 {
+		t.Errorf("ExtractPMIDs: got %d unique PMIDs, want 3", len(pmids))
+	}
+	for _, id := range []string{"111", "222", "333"} {
+		if _, ok := pmids[id]; !ok {
+			t.Errorf("ExtractPMIDs: missing PMID %q", id)
+		}
+	}
+}
+
 func TestExtractPMIDs(t *testing.T) {
 	text := "See [PMID:111] and [PMID:222]. Also [PMID:111] again."
 	pmids := ExtractPMIDs(text)

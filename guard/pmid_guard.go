@@ -10,8 +10,9 @@ import (
 	"google.golang.org/genai"
 )
 
-// pmidPattern matches [PMID:12345678] and [12345678] in text.
-var pmidPattern = regexp.MustCompile(`\[PMID:(\d+)\]`)
+// pmidPattern matches [PMID:12345678] and [PMID:12345678](url) in text.
+// The optional (url) group is non-capturing so the PMID is always capture group 1.
+var pmidPattern = regexp.MustCompile(`\[PMID:(\d+)\](?:\([^)]*\))?`)
 
 // StripHallucinatedPMIDs removes any [PMID:N] citations from content whose N
 // is not in the allowedPMIDs set. Stripped citations are logged as warnings.

@@ -53,6 +53,7 @@ type QueryPlan struct {
 	Filters      Filters   `json:"filters,omitempty"`
 	SortOrder    SortOrder `json:"sort_order,omitempty"`
 	Rationale    string    `json:"rationale,omitempty"`
+	MaxResults   int       `json:"max_results,omitempty"` // 0 means use default (100)
 }
 
 // SearchResult is the output of a successful esearch call.

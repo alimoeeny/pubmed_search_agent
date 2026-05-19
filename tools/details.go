@@ -9,6 +9,10 @@ import (
 	"github.com/alimoeeny/pubmed_search_agent/pubmed"
 )
 
+// SessionKeyFetchedPMIDs is the session-state key under which pubmed_fetch_details
+// accumulates the set of fetched PMIDs. Used by the PMID guard in main.go.
+const SessionKeyFetchedPMIDs = "fetched_pmids"
+
 const (
 	defaultFetchMax = 20
 	hardFetchCap    = 50
@@ -53,6 +57,17 @@ func NewPubmedFetchDetailsTool(client *pubmed.Client) (tool.Tool, error) {
 		if err != nil {
 			return FetchResult{}, fmt.Errorf("pubmed_fetch_details: parsing XML: %w", err)
 		}
+
+		// Persist fetched PMIDs into session state so the PMID guard
+		// knows which PMIDs are legitimate citations.
+		existing, _ := ctx.Actions().StateDelta[SessionKeyFetchedPMIDs]
+		prev := toStringSliceAny(existing)
+		for _, a := range articles {
+			if a.PMID != "" {
+				prev = append(prev, a.PMID)
+			}
+		}
+		ctx.Actions().StateDelta[SessionKeyFetchedPMIDs] = deduplicateStrings(prev)
 
 		return FetchResult{Articles: articles}, nil
 	}

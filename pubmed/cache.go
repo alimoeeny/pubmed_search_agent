@@ -13,6 +13,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"golang.org/x/sync/singleflight"
 )
 
 const (
@@ -31,9 +33,11 @@ type cacheEntry struct {
 
 // CachingRoundTripper wraps an http.RoundTripper and caches responses on disk.
 // It is disabled when the PUBMED_CACHE_DISABLE env var is set to "1".
+// Concurrent requests for the same cache key are deduplicated via singleflight.
 type CachingRoundTripper struct {
-	Base    http.RoundTripper
+	Base     http.RoundTripper
 	cacheDir string
+	group    singleflight.Group
 }
 
 // NewCachingRoundTripper creates a CachingRoundTripper backed by Base.
@@ -66,17 +70,33 @@ func (c *CachingRoundTripper) RoundTrip(req *http.Request) (*http.Response, erro
 		return entryToResponse(req, entry), nil
 	}
 
-	resp, err := c.Base.RoundTrip(req)
+	// Deduplicate concurrent cache misses for the same key.
+	type result struct {
+		resp *http.Response
+		err  error
+	}
+	v, err, _ := c.group.Do(key, func() (any, error) {
+		// Re-check cache inside the singleflight to handle a race where
+		// another goroutine already wrote the file while we were waiting.
+		if entry, ok := readCacheEntry(path); ok {
+			return &result{resp: entryToResponse(req, entry)}, nil
+		}
+		resp, err := c.Base.RoundTrip(req)
+		if err != nil {
+			return &result{err: err}, nil
+		}
+		if resp.StatusCode == http.StatusOK {
+			if saveErr := saveCacheEntry(path, resp); saveErr != nil {
+				fmt.Fprintf(os.Stderr, "pubmed cache: failed to save %q: %v\n", path, saveErr)
+			}
+		}
+		return &result{resp: resp}, nil
+	})
 	if err != nil {
 		return nil, err
 	}
-	if resp.StatusCode == http.StatusOK {
-		if saveErr := saveCacheEntry(path, resp); saveErr != nil {
-			// Non-fatal: log and continue.
-			fmt.Fprintf(os.Stderr, "pubmed cache: failed to save %q: %v\n", path, saveErr)
-		}
-	}
-	return resp, nil
+	r := v.(*result)
+	return r.resp, r.err
 }
 
 func cacheDirectory() (string, error) {

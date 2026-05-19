@@ -1,0 +1,96 @@
+<?xml version="1.0" ?>
+<!DOCTYPE PubmedArticleSet PUBLIC "-//NLM//DTD PubMedArticle, 1st January 2019//EN" "https://dtd.nlm.nih.gov/ncbi/pubmed/out/pubmed_190101.dtd">
+<PubmedArticleSet>
+  <PubmedArticle>
+    <MedlineCitation Status="MEDLINE" Owner="NLM">
+      <PMID Version="1">12345678</PMID>
+      <Article PubModel="Print">
+        <Journal>
+          <ISSN IssnType="Print">0028-4793</ISSN>
+          <JournalIssue CitedMedium="Print">
+            <Volume>333</Volume>
+            <Issue>20</Issue>
+            <PubDate>
+              <Year>2023</Year>
+              <Month>Nov</Month>
+              <Day>16</Day>
+            </PubDate>
+          </JournalIssue>
+          <Title>The New England Journal of Medicine</Title>
+          <ISOAbbreviation>N Engl J Med</ISOAbbreviation>
+        </Journal>
+        <ArticleTitle>Aspirin and Cardiovascular Events after STEMI: A Randomized Trial.</ArticleTitle>
+        <Abstract>
+          <AbstractText Label="BACKGROUND">Low-dose aspirin reduces recurrent cardiovascular events after STEMI.</AbstractText>
+          <AbstractText Label="METHODS">We randomly assigned 1200 patients to aspirin or placebo after STEMI.</AbstractText>
+          <AbstractText Label="RESULTS">Aspirin reduced 30-day mortality by 23% (p=0.01).</AbstractText>
+          <AbstractText Label="CONCLUSIONS">Aspirin should be continued after STEMI.</AbstractText>
+        </Abstract>
+        <AuthorList CompleteYN="Y">
+          <Author ValidYN="Y">
+            <LastName>Smith</LastName>
+            <ForeName>John A</ForeName>
+            <Initials>JA</Initials>
+          </Author>
+          <Author ValidYN="Y">
+            <LastName>Jones</LastName>
+            <ForeName>Mary B</ForeName>
+            <Initials>MB</Initials>
+          </Author>
+        </AuthorList>
+        <ELocationIDList>
+          <ELocationID EIdType="doi" ValidYN="Y">10.1056/NEJMoa2300001</ELocationID>
+        </ELocationIDList>
+      </Article>
+      <MeshHeadingList>
+        <MeshHeading>
+          <DescriptorName UI="D001241" MajorTopicYN="Y">Aspirin</DescriptorName>
+        </MeshHeading>
+        <MeshHeading>
+          <DescriptorName UI="D009203" MajorTopicYN="N">Myocardial Infarction</DescriptorName>
+        </MeshHeading>
+      </MeshHeadingList>
+    </MedlineCitation>
+    <PubmedData>
+      <ArticleIdList>
+        <ArticleId IdType="pubmed">12345678</ArticleId>
+        <ArticleId IdType="doi">10.1056/NEJMoa2300001</ArticleId>
+      </ArticleIdList>
+    </PubmedData>
+  </PubmedArticle>
+  <PubmedArticle>
+    <MedlineCitation Status="MEDLINE" Owner="NLM">
+      <PMID Version="1">87654321</PMID>
+      <Article PubModel="Print-Electronic">
+        <Journal>
+          <JournalIssue CitedMedium="Internet">
+            <PubDate>
+              <MedlineDate>2022 Jan-Mar</MedlineDate>
+            </PubDate>
+          </JournalIssue>
+          <Title>Circulation</Title>
+          <ISOAbbreviation>Circulation</ISOAbbreviation>
+        </Journal>
+        <ArticleTitle>Meta-analysis of antiplatelet therapy in acute coronary syndromes</ArticleTitle>
+        <Abstract>
+          <AbstractText>Antiplatelet therapy reduces major adverse cardiac events in ACS patients.</AbstractText>
+        </Abstract>
+        <AuthorList CompleteYN="Y">
+          <Author ValidYN="Y">
+            <CollectiveName>Antiplatelet Trialists Collaboration</CollectiveName>
+          </Author>
+        </AuthorList>
+      </Article>
+      <MeshHeadingList>
+        <MeshHeading>
+          <DescriptorName UI="D010975" MajorTopicYN="Y">Platelet Aggregation Inhibitors</DescriptorName>
+        </MeshHeading>
+      </MeshHeadingList>
+    </MedlineCitation>
+    <PubmedData>
+      <ArticleIdList>
+        <ArticleId IdType="pubmed">87654321</ArticleId>
+      </ArticleIdList>
+    </PubmedData>
+  </PubmedArticle>
+</PubmedArticleSet>

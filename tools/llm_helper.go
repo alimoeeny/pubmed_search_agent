@@ -1,10 +1,10 @@
 package tools
 
 import (
+	"context"
 	"fmt"
 
 	"google.golang.org/adk/model"
-	"google.golang.org/adk/tool"
 )
 
 // toStringSliceAny safely converts any session-state value to []string.
@@ -33,7 +33,8 @@ func deduplicateStrings(in []string) []string {
 }
 
 // generateText calls the LLM and returns the first text part from the response.
-func generateText(ctx tool.Context, llm model.LLM, req *model.LLMRequest) (string, error) {
+// ctx may be any context.Context — tool.Context satisfies this via embedding.
+func generateText(ctx context.Context, llm model.LLM, req *model.LLMRequest) (string, error) {
 	var lastErr error
 	for resp, err := range llm.GenerateContent(ctx, req, false) {
 		if err != nil {

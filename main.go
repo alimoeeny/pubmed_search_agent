@@ -15,6 +15,7 @@ import (
 	"google.golang.org/adk/cmd/launcher/full"
 	"google.golang.org/adk/model"
 	"google.golang.org/adk/tool"
+	"google.golang.org/genai"
 
 	"github.com/alimoeeny/pubmed_search_agent/guard"
 	"github.com/alimoeeny/pubmed_search_agent/pubmed"
@@ -80,19 +81,66 @@ func main() {
 		log.Fatalf("Failed to create ask_user tool: %v", err)
 	}
 
-	// --- PMID guard: AfterModelCallback ---
-	// Tracks fetched PMIDs in session state and strips hallucinated citations
-	// from the final model response.
-	pmidGuardCallback := func(ctx agent.CallbackContext, resp *model.LLMResponse, respErr error) (*model.LLMResponse, error) {
+	// --- Citation verifier + PMID guard: AfterModelCallback ---
+	// On every model turn:
+	//   1. Retrieve the set of PMIDs fetched this session from session state.
+	//   2. For any unknown PMID citation: fetch real metadata from NCBI,
+	//      ask the LLM to correct or remove the citation (up to 3 attempts),
+	//      then fall back to a hallucination warning marker.
+	//   3. Run the fast strip guard as a final safety net.
+	verifier := guard.NewVerifier(pubmedClient, orchestratorModel)
+
+	pmidGuardCallback := func(cbCtx agent.CallbackContext, resp *model.LLMResponse, respErr error) (*model.LLMResponse, error) {
 		if resp == nil || resp.Content == nil {
+			return nil, nil
+		}
+		// Only inspect text-bearing turns (skip pure tool-call turns).
+		hasText := false
+		for _, part := range resp.Content.Parts {
+			if part.Text != "" {
+				hasText = true
+				break
+			}
+		}
+		if !hasText {
 			return nil, nil
 		}
 
 		// Retrieve allowed PMID set from session state.
-		raw, _ := ctx.State().Get(agenttools.SessionKeyFetchedPMIDs)
+		raw, _ := cbCtx.State().Get(agenttools.SessionKeyFetchedPMIDs)
 		allowed := guard.PMIDSet(toStringSlice(raw))
 
-		sanitized := guard.StripHallucinatedPMIDs(resp.Content, allowed)
+		// Stage 1: verification + LLM correction loop for unknown PMIDs.
+		// Operate on each text part independently.
+		newParts := make([]*genai.Part, 0, len(resp.Content.Parts))
+		changed := false
+		for _, part := range resp.Content.Parts {
+			if part.Text == "" {
+				newParts = append(newParts, part)
+				continue
+			}
+			fixed, err := verifier.FixCitations(ctx, part.Text, allowed)
+			if err != nil {
+				log.Printf("WARN: citation verifier error: %v", err)
+				fixed = part.Text
+			}
+			if fixed != part.Text {
+				changed = true
+				newParts = append(newParts, &genai.Part{Text: fixed})
+			} else {
+				newParts = append(newParts, part)
+			}
+		}
+
+		var workingContent *genai.Content
+		if changed {
+			workingContent = &genai.Content{Role: resp.Content.Role, Parts: newParts}
+		} else {
+			workingContent = resp.Content
+		}
+
+		// Stage 2: fast strip guard as final safety net.
+		sanitized := guard.StripHallucinatedPMIDs(workingContent, allowed)
 		if sanitized == resp.Content {
 			return nil, nil // unchanged
 		}

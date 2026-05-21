@@ -6,7 +6,6 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"strings"
 	"time"
 
 	"google.golang.org/adk/agent"
@@ -17,41 +16,39 @@ import (
 	"google.golang.org/adk/tool"
 	"google.golang.org/genai"
 
+	"github.com/alimoeeny/pubmed_search_agent/config"
 	"github.com/alimoeeny/pubmed_search_agent/guard"
 	"github.com/alimoeeny/pubmed_search_agent/pubmed"
 	agenttools "github.com/alimoeeny/pubmed_search_agent/tools"
 )
 
-// envOrDefault returns the value of the named env var, or def if it is unset/empty.
-func envOrDefault(name, def string) string {
-	if v := os.Getenv(name); v != "" {
-		return v
-	}
-	return def
-}
-
 func main() {
 	ctx := context.Background()
 
-	// --- Validate required env vars ---
-	ncbiEmail := os.Getenv("NCBI_EMAIL")
-	if ncbiEmail == "" {
-		log.Fatal("NCBI_EMAIL environment variable is required (NCBI polite-access policy). Set it to your email address.")
+	// --- Load config (config.json overridden by env vars) ---
+	cfgFile := os.Getenv("CONFIG_FILE")
+	if cfgFile == "" {
+		cfgFile = "config.json"
 	}
-	if !strings.Contains(ncbiEmail, "@") {
-		log.Fatalf("NCBI_EMAIL %q does not look like a valid email address.", ncbiEmail)
+	appCfg, err := config.LoadAppConfig(cfgFile)
+	if err != nil {
+		log.Fatalf("Config error: %v", err)
 	}
+	userCfg := appCfg.DefaultUser
+
+	// UserConfigProvider — swap for a DB-backed implementation for per-user overrides.
+	_ = config.NewStaticProvider(userCfg)
 
 	// --- Build per-role models ---
-	orchestratorModel, err := ModelFor(ctx, RoleOrchestrator)
+	orchestratorModel, err := ModelFor(ctx, RoleOrchestrator, userCfg)
 	if err != nil {
 		log.Fatalf("Failed to create orchestrator model: %v", err)
 	}
-	validatorModel, err := ModelFor(ctx, RoleValidator)
+	validatorModel, err := ModelFor(ctx, RoleValidator, userCfg)
 	if err != nil {
 		log.Fatalf("Failed to create validator model: %v", err)
 	}
-	plannerModel, err := ModelFor(ctx, RolePlanner)
+	plannerModel, err := ModelFor(ctx, RolePlanner, userCfg)
 	if err != nil {
 		log.Fatalf("Failed to create planner model: %v", err)
 	}
@@ -62,7 +59,7 @@ func main() {
 		log.Fatalf("Failed to create caching transport: %v", err)
 	}
 	pubmedClient := pubmed.NewClient(pubmed.ClientConfig{
-		Email:      ncbiEmail,
+		Email:      appCfg.NCBIEmail,
 		HTTPClient: &http.Client{Transport: crt, Timeout: 30 * time.Second},
 	})
 	defer pubmedClient.Close()
@@ -90,15 +87,10 @@ func main() {
 	}
 
 	// --- PDF report tool ---
-	pdfOutDir := envOrDefault("PDF_OUTPUT_DIR", "./reports")
-	pdfBaseURL := envOrDefault("PDF_DOWNLOAD_BASE_URL", "http://localhost:8081")
-	pdfPort := envOrDefault("PDF_PORT", "8081")
-	pdfStylePrompt := os.Getenv("PDF_STYLE_PROMPT")
-
 	pdfTool, err := agenttools.NewGeneratePDFTool(agenttools.PDFToolConfig{
-		OutDir:          pdfOutDir,
-		BaseDownloadURL: pdfBaseURL,
-		StylePrompt:     pdfStylePrompt,
+		OutDir:          appCfg.PDFOutputDir,
+		BaseDownloadURL: appCfg.PDFDownloadBaseURL,
+		StylePrompt:     userCfg.PDFStylePrompt,
 		LLM:             orchestratorModel,
 	})
 	if err != nil {
@@ -106,14 +98,14 @@ func main() {
 	}
 
 	// Start a simple file server to serve generated PDFs for download.
-	// This runs on pdfPort and is separate from the ADK web server.
-	if pdfPort != "" {
+	// This runs on PDFPort and is separate from the ADK web server.
+	if appCfg.PDFPort != "" {
 		go func() {
 			mux := http.NewServeMux()
-			fs := http.FileServer(http.Dir(pdfOutDir))
+			fs := http.FileServer(http.Dir(appCfg.PDFOutputDir))
 			mux.Handle("/download/", http.StripPrefix("/download/", fs))
-			log.Printf("PDF download server listening on :%s (serving %s)", pdfPort, pdfOutDir)
-			if serveErr := http.ListenAndServe(":"+pdfPort, mux); serveErr != nil {
+			log.Printf("PDF download server listening on :%s (serving %s)", appCfg.PDFPort, appCfg.PDFOutputDir)
+			if serveErr := http.ListenAndServe(":"+appCfg.PDFPort, mux); serveErr != nil {
 				log.Printf("WARN: PDF file server stopped: %v", serveErr)
 			}
 		}()
@@ -205,12 +197,12 @@ func main() {
 		log.Fatalf("Failed to create agent: %v", err)
 	}
 
-	config := &launcher.Config{
+	launchCfg := &launcher.Config{
 		AgentLoader: agent.NewSingleLoader(researchAgent),
 	}
 
 	l := full.NewLauncher()
-	if err = l.Execute(ctx, config, os.Args[1:]); err != nil {
+	if err = l.Execute(ctx, launchCfg, os.Args[1:]); err != nil {
 		log.Fatalf("Run failed: %v\n\n%s", err, l.CommandLineSyntax())
 	}
 }
@@ -264,5 +256,5 @@ Format rules:
 - Keep the summary concise (300–500 words unless the question requires more depth).
 - The References section must list every PMID cited in the summary.`
 
-// Ensure fmt is used (for toStringSlice fallback logging if added later).
+// Ensure fmt is used.
 var _ = fmt.Sprintf

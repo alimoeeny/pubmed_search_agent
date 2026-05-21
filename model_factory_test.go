@@ -4,6 +4,8 @@ import (
 	"context"
 	"strings"
 	"testing"
+
+	"github.com/alimoeeny/pubmed_search_agent/config"
 )
 
 func TestParseModelSpec(t *testing.T) {
@@ -44,26 +46,27 @@ func TestParseModelSpec(t *testing.T) {
 }
 
 func TestResolveSpecDefaults(t *testing.T) {
-	t.Setenv("PUBMED_AGENT_MODEL_ORCHESTRATOR", "")
-	t.Setenv("PUBMED_AGENT_MODEL_DEFAULT", "")
+	cfg := config.UserConfig{} // all empty → must use built-in fallback
 
-	spec, err := resolveSpec(RoleOrchestrator)
+	spec, err := resolveSpec(RoleOrchestrator, cfg)
 	if err != nil {
 		t.Fatalf("resolveSpec: unexpected error: %v", err)
 	}
 	if spec.Provider != ProviderGemini {
 		t.Errorf("default provider = %q, want %q", spec.Provider, ProviderGemini)
 	}
-	if spec.ModelID != "gemini-flash-latest" {
-		t.Errorf("default model = %q, want %q", spec.ModelID, "gemini-flash-latest")
+	if spec.ModelID != "gemini-2.0-flash-latest" {
+		t.Errorf("default model = %q, want gemini-2.0-flash-latest", spec.ModelID)
 	}
 }
 
 func TestResolveSpecRoleSpecificOverride(t *testing.T) {
-	t.Setenv("PUBMED_AGENT_MODEL_PLANNER", "gemini:gemini-2.5-pro")
-	t.Setenv("PUBMED_AGENT_MODEL_DEFAULT", "gemini:gemini-flash-latest")
+	cfg := config.UserConfig{
+		ModelPlanner: "gemini:gemini-2.5-pro",
+		ModelDefault: "gemini:gemini-flash-latest",
+	}
 
-	spec, err := resolveSpec(RolePlanner)
+	spec, err := resolveSpec(RolePlanner, cfg)
 	if err != nil {
 		t.Fatalf("resolveSpec: unexpected error: %v", err)
 	}
@@ -73,10 +76,12 @@ func TestResolveSpecRoleSpecificOverride(t *testing.T) {
 }
 
 func TestResolveSpecDefaultFallback(t *testing.T) {
-	t.Setenv("PUBMED_AGENT_MODEL_VALIDATOR", "")
-	t.Setenv("PUBMED_AGENT_MODEL_DEFAULT", "gemini:gemini-2.5-pro")
+	cfg := config.UserConfig{
+		// ModelValidator intentionally empty — should fall back to ModelDefault
+		ModelDefault: "gemini:gemini-2.5-pro",
+	}
 
-	spec, err := resolveSpec(RoleValidator)
+	spec, err := resolveSpec(RoleValidator, cfg)
 	if err != nil {
 		t.Fatalf("resolveSpec: unexpected error: %v", err)
 	}
@@ -86,9 +91,12 @@ func TestResolveSpecDefaultFallback(t *testing.T) {
 }
 
 func TestModelForUnsupportedProvider(t *testing.T) {
-	t.Setenv("PUBMED_AGENT_MODEL_ORCHESTRATOR", "anthropic:claude-sonnet-4")
+	cfg := config.UserConfig{
+		GoogleAPIKey:      "test-key",
+		ModelOrchestrator: "anthropic:claude-sonnet-4",
+	}
 
-	_, err := ModelFor(context.Background(), RoleOrchestrator)
+	_, err := ModelFor(context.Background(), RoleOrchestrator, cfg)
 	if err == nil {
 		t.Fatal("expected error for unsupported provider, got nil")
 	}

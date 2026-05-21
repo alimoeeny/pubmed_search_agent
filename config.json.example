@@ -1,0 +1,16 @@
+{
+  "_comment": "Copy this file to config.json and fill in your values. Env vars override any field here.",
+  "ncbi_email": "you@example.com",
+  "pdf_output_dir": "./reports",
+  "pdf_download_base_url": "http://localhost:8081",
+  "pdf_port": "8081",
+  "default_user": {
+    "_comment": "google_api_key can be left empty here and set via GOOGLE_API_KEY env var instead.",
+    "google_api_key": "",
+    "model_orchestrator": "gemini:gemini-2.5-pro-latest",
+    "model_validator": "gemini:gemini-2.0-flash-latest",
+    "model_planner": "gemini:gemini-2.0-flash-latest",
+    "model_default": "gemini:gemini-2.0-flash-latest",
+    "pdf_style_prompt": ""
+  }
+}

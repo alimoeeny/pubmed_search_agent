@@ -4,12 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
 	"strings"
 
 	"google.golang.org/adk/model"
 	"google.golang.org/adk/model/gemini"
 	"google.golang.org/genai"
+
+	"github.com/alimoeeny/pubmed_search_agent/config"
 )
 
 // ModelRole identifies which component of the agent a model is serving.
@@ -38,11 +39,6 @@ type ModelSpec struct {
 // ErrUnsupportedProvider is returned when a provider has no wired constructor.
 var ErrUnsupportedProvider = errors.New("unsupported LLM provider")
 
-// envKeyForRole returns the primary env var name for a given role.
-func envKeyForRole(role ModelRole) string {
-	return "PUBMED_AGENT_MODEL_" + strings.ToUpper(string(role))
-}
-
 // ParseModelSpec parses a "provider:model-id" string.
 func ParseModelSpec(s string) (ModelSpec, error) {
 	parts := strings.SplitN(s, ":", 2)
@@ -52,37 +48,37 @@ func ParseModelSpec(s string) (ModelSpec, error) {
 	return ModelSpec{Provider: Provider(parts[0]), ModelID: parts[1]}, nil
 }
 
-// resolveSpec resolves the ModelSpec for a role using the env-var priority:
-// role-specific → PUBMED_AGENT_MODEL_DEFAULT → hard-coded default.
-func resolveSpec(role ModelRole) (ModelSpec, error) {
+// resolveSpec returns the ModelSpec for role using cfg, falling back to built-in default.
+// Priority: role-specific model → ModelDefault → "gemini:gemini-2.0-flash-latest".
+func resolveSpec(role ModelRole, cfg config.UserConfig) (ModelSpec, error) {
 	candidates := []string{
-		os.Getenv(envKeyForRole(role)),
-		os.Getenv("PUBMED_AGENT_MODEL_DEFAULT"),
-		"gemini:gemini-flash-latest",
+		cfg.ModelForRole(string(role)),
+		cfg.ModelDefault,
+		"gemini:gemini-2.0-flash-latest",
 	}
 	for _, c := range candidates {
 		if c != "" {
 			return ParseModelSpec(c)
 		}
 	}
-	// Unreachable — the hard-coded fallback is always non-empty.
-	return ParseModelSpec("gemini:gemini-flash-latest")
+	// Unreachable — the built-in fallback is always non-empty.
+	return ParseModelSpec("gemini:gemini-2.0-flash-latest")
 }
 
-// ModelFor returns a model.LLM for the given role, respecting env-var overrides.
-func ModelFor(ctx context.Context, role ModelRole) (model.LLM, error) {
-	spec, err := resolveSpec(role)
+// ModelFor returns a model.LLM for the given role using the provided UserConfig.
+// All configuration is read from cfg — no os.Getenv calls.
+func ModelFor(ctx context.Context, role ModelRole, cfg config.UserConfig) (model.LLM, error) {
+	spec, err := resolveSpec(role, cfg)
 	if err != nil {
 		return nil, fmt.Errorf("role %q: %w", role, err)
 	}
 
 	switch spec.Provider {
 	case ProviderGemini:
-		apiKey := os.Getenv("GOOGLE_API_KEY")
-		if apiKey == "" {
-			return nil, fmt.Errorf("GOOGLE_API_KEY is required for Gemini provider (role %q)", role)
+		if cfg.GoogleAPIKey == "" {
+			return nil, fmt.Errorf("role %q: GoogleAPIKey is empty in UserConfig", role)
 		}
-		m, err := gemini.NewModel(ctx, spec.ModelID, &genai.ClientConfig{APIKey: apiKey})
+		m, err := gemini.NewModel(ctx, spec.ModelID, &genai.ClientConfig{APIKey: cfg.GoogleAPIKey})
 		if err != nil {
 			return nil, fmt.Errorf("role %q: creating Gemini model %q: %w", role, spec.ModelID, err)
 		}

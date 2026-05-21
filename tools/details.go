@@ -13,6 +13,10 @@ import (
 // accumulates the set of fetched PMIDs. Used by the PMID guard in main.go.
 const SessionKeyFetchedPMIDs = "fetched_pmids"
 
+// SessionKeyFetchedArticles is the session-state key under which pubmed_fetch_details
+// accumulates a map[string]pubmed.Article (keyed by PMID). Used by the PDF generator.
+const SessionKeyFetchedArticles = "fetched_articles"
+
 const (
 	defaultFetchMax = 20
 	hardFetchCap    = 50
@@ -68,6 +72,16 @@ func NewPubmedFetchDetailsTool(client *pubmed.Client) (tool.Tool, error) {
 			}
 		}
 		ctx.Actions().StateDelta[SessionKeyFetchedPMIDs] = deduplicateStrings(prev)
+
+		// Persist full article metadata map for use by the PDF generator.
+		existingArticles, _ := ctx.Actions().StateDelta[SessionKeyFetchedArticles]
+		articleMap := toArticleMapAny(existingArticles)
+		for _, a := range articles {
+			if a.PMID != "" {
+				articleMap[a.PMID] = a
+			}
+		}
+		ctx.Actions().StateDelta[SessionKeyFetchedArticles] = articleMap
 
 		return FetchResult{Articles: articles}, nil
 	}

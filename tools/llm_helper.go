@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/alimoeeny/pubmed_search_agent/pubmed"
 	"google.golang.org/adk/model"
 )
 
@@ -30,6 +31,18 @@ func deduplicateStrings(in []string) []string {
 		}
 	}
 	return out
+}
+
+// toArticleMapAny safely converts any session-state value to map[string]pubmed.Article.
+// Returns an empty (non-nil) map on nil or wrong type so callers can always write into it.
+func toArticleMapAny(v any) map[string]pubmed.Article {
+	if v == nil {
+		return make(map[string]pubmed.Article)
+	}
+	if m, ok := v.(map[string]pubmed.Article); ok {
+		return m
+	}
+	return make(map[string]pubmed.Article)
 }
 
 // generateText calls the LLM and returns the first text part from the response.

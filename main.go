@@ -22,6 +22,14 @@ import (
 	agenttools "github.com/alimoeeny/pubmed_search_agent/tools"
 )
 
+// envOrDefault returns the value of the named env var, or def if it is unset/empty.
+func envOrDefault(name, def string) string {
+	if v := os.Getenv(name); v != "" {
+		return v
+	}
+	return def
+}
+
 func main() {
 	ctx := context.Background()
 
@@ -79,6 +87,36 @@ func main() {
 	askUserTool, err := agenttools.NewAskUserTool()
 	if err != nil {
 		log.Fatalf("Failed to create ask_user tool: %v", err)
+	}
+
+	// --- PDF report tool ---
+	pdfOutDir := envOrDefault("PDF_OUTPUT_DIR", "./reports")
+	pdfBaseURL := envOrDefault("PDF_DOWNLOAD_BASE_URL", "http://localhost:8081")
+	pdfPort := envOrDefault("PDF_PORT", "8081")
+	pdfStylePrompt := os.Getenv("PDF_STYLE_PROMPT")
+
+	pdfTool, err := agenttools.NewGeneratePDFTool(agenttools.PDFToolConfig{
+		OutDir:          pdfOutDir,
+		BaseDownloadURL: pdfBaseURL,
+		StylePrompt:     pdfStylePrompt,
+		LLM:             orchestratorModel,
+	})
+	if err != nil {
+		log.Fatalf("Failed to create generate_pdf tool: %v", err)
+	}
+
+	// Start a simple file server to serve generated PDFs for download.
+	// This runs on pdfPort and is separate from the ADK web server.
+	if pdfPort != "" {
+		go func() {
+			mux := http.NewServeMux()
+			fs := http.FileServer(http.Dir(pdfOutDir))
+			mux.Handle("/download/", http.StripPrefix("/download/", fs))
+			log.Printf("PDF download server listening on :%s (serving %s)", pdfPort, pdfOutDir)
+			if serveErr := http.ListenAndServe(":"+pdfPort, mux); serveErr != nil {
+				log.Printf("WARN: PDF file server stopped: %v", serveErr)
+			}
+		}()
 	}
 
 	// --- Citation verifier + PMID guard: AfterModelCallback ---
@@ -159,6 +197,7 @@ func main() {
 			searchTool,
 			detailsTool,
 			askUserTool,
+			pdfTool,
 		},
 		AfterModelCallbacks: []llmagent.AfterModelCallback{pmidGuardCallback},
 	})
@@ -212,6 +251,13 @@ const agentInstruction = `You are a PubMed research assistant. Follow these step
      - [[XXXXXXXX](https://pubmed.ncbi.nlm.nih.gov/XXXXXXXX/)] Title — *Journal*, YYYY-MM-DD
    - Do NOT invent PMIDs, titles, or findings. Only cite PMIDs returned by pubmed_fetch_details.
    - If the abstracts do not contain enough information to answer the question, say so clearly.
+
+6. REPORT: After delivering the summary, ALWAYS call generate_pdf with:
+   - question: the original research question (verbatim)
+   - summary: your full markdown summary text (including the References section)
+   - articles: the list of articles returned by pubmed_fetch_details, each with pmid, title, journal, and date
+   After generate_pdf returns, include the download link in your response as:
+   📄 [Download PDF report](<download_url>)
 
 Format rules:
 - Use **bold** for the summary header.

@@ -82,7 +82,7 @@ func TestLoadAppConfig_JSONFileLoaded(t *testing.T) {
 		DefaultUser: config.UserConfig{
 			GoogleAPIKey:      "file-api-key",
 			ModelOrchestrator: "gemini:gemini-2.5-pro-latest",
-			ModelDefault:      "gemini:gemini-2.0-flash-latest",
+			ModelDefault:      "gemini:gemini-3.5-flash-latest",
 		},
 	}
 	path := writeConfig(t, src)

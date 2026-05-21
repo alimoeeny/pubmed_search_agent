@@ -49,12 +49,12 @@ func ParseModelSpec(s string) (ModelSpec, error) {
 }
 
 // resolveSpec returns the ModelSpec for role using cfg, falling back to built-in default.
-// Priority: role-specific model → ModelDefault → "gemini:gemini-2.0-flash-latest".
+// Priority: role-specific model → ModelDefault → "gemini:gemini-3.5-flash".
 func resolveSpec(role ModelRole, cfg config.UserConfig) (ModelSpec, error) {
 	candidates := []string{
 		cfg.ModelForRole(string(role)),
 		cfg.ModelDefault,
-		"gemini:gemini-2.0-flash-latest",
+		"gemini:gemini-3.5-flash",
 	}
 	for _, c := range candidates {
 		if c != "" {
@@ -62,7 +62,7 @@ func resolveSpec(role ModelRole, cfg config.UserConfig) (ModelSpec, error) {
 		}
 	}
 	// Unreachable — the built-in fallback is always non-empty.
-	return ParseModelSpec("gemini:gemini-2.0-flash-latest")
+	return ParseModelSpec("gemini:gemini-3.5-flash")
 }
 
 // ModelFor returns a model.LLM for the given role using the provided UserConfig.

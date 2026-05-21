@@ -55,8 +55,8 @@ func TestResolveSpecDefaults(t *testing.T) {
 	if spec.Provider != ProviderGemini {
 		t.Errorf("default provider = %q, want %q", spec.Provider, ProviderGemini)
 	}
-	if spec.ModelID != "gemini-2.0-flash-latest" {
-		t.Errorf("default model = %q, want gemini-2.0-flash-latest", spec.ModelID)
+	if spec.ModelID != "gemini-3.5-flash" {
+		t.Errorf("default model = %q, want gemini-3.5-flash", spec.ModelID)
 	}
 }
 

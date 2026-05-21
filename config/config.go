@@ -51,7 +51,7 @@ func hardcodedDefaults() AppConfig {
 		PDFDownloadBaseURL: "http://localhost:8081",
 		PDFPort:            "8081",
 		DefaultUser: UserConfig{
-			ModelDefault: "gemini:gemini-2.0-flash-latest",
+			ModelDefault: "gemini:gemini-3.5-flash",
 		},
 	}
 }

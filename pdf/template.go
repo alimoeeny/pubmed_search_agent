@@ -16,141 +16,128 @@ const fallbackTemplate = `<!DOCTYPE html>
 <style>
   @page {
     size: A4;
-    margin: 2.2cm 2.5cm 2.5cm 2.5cm;
+    margin: 2cm 2.5cm 2.5cm 2.5cm;
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body {
     font-family: Georgia, "Times New Roman", serif;
-    font-size: 11pt;
-    line-height: 1.65;
-    color: #1a1a1a;
-    background: #fff;
+    font-size: 10.5pt;
+    line-height: 1.7;
+    color: #1e1e1e;
+    background: #f7f6f2;
   }
-  /* ── Global link styles ── */
-  a {
-    color: #0055aa;
-    text-decoration: underline;
-  }
-  a:visited { color: #0055aa; }
-  /* ── Print: force link visibility + print URL after each ref link ── */
   @media print {
-    a[href] {
-      color: #0055aa !important;
-      text-decoration: underline !important;
+    body {
+      background: #f7f6f2 !important;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
     }
+  }
+  a { color: #0055aa; text-decoration: underline; }
+  a:visited { color: #0055aa; }
+  @media print {
+    a[href] { color: #0055aa !important; text-decoration: underline !important; }
     .ref-body a[href]::after {
       content: " (" attr(href) ")";
-      font-size: 7.5pt;
-      color: #555;
+      font-size: 7pt;
+      color: #8a8278;
       word-break: break-all;
       font-style: normal;
     }
   }
-  /* ── Header ── */
   .report-header {
-    background: #1a5f7a;
-    color: #fff;
-    padding: 18pt 0 14pt;
-    margin-bottom: 20pt;
-    border-radius: 3pt;
+    background: #1c2b3a;
+    border-top: 2pt solid #c8401a;
+    padding: 16pt 20pt 20pt;
+    margin-bottom: 26pt;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
   }
-  .report-header .label {
-    font-family: Arial, Helvetica, sans-serif;
-    font-size: 8pt;
-    letter-spacing: 2pt;
+  .report-header .tool-label {
+    font-family: "Courier New", Courier, monospace;
+    font-size: 7pt;
+    letter-spacing: 3pt;
     text-transform: uppercase;
-    opacity: 0.8;
-    padding: 0 18pt;
+    color: #c8401a;
     display: block;
-    margin-bottom: 4pt;
+    margin-bottom: 10pt;
   }
   .report-header .question {
-    font-size: 14pt;
+    font-family: Georgia, "Times New Roman", serif;
+    font-size: 15pt;
     font-weight: bold;
-    padding: 0 18pt;
-    line-height: 1.35;
+    color: #fff;
+    line-height: 1.3;
+    margin-bottom: 10pt;
+    text-transform: capitalize;
   }
   .report-header .meta {
-    font-family: Arial, Helvetica, sans-serif;
-    font-size: 8pt;
-    opacity: 0.75;
-    padding: 8pt 18pt 0;
+    font-family: "Courier New", Courier, monospace;
+    font-size: 7.5pt;
+    color: #8a8278;
   }
-  /* ── Body ── */
-  .body-section {
-    margin-bottom: 20pt;
-  }
-  .body-section h1, .body-section h2, .body-section h3 {
-    font-family: Arial, Helvetica, sans-serif;
-    color: #1a5f7a;
-    margin: 14pt 0 5pt;
+  .body-section { margin-bottom: 20pt; }
+  .body-section h1,
+  .body-section h2,
+  .body-section h3 {
+    font-family: Georgia, "Times New Roman", serif;
+    color: #1c2b3a;
+    border-left: 3pt solid #c8401a;
+    padding-left: 10pt;
+    margin: 16pt 0 6pt;
+    line-height: 1.3;
   }
   .body-section h1 { font-size: 13pt; }
   .body-section h2 { font-size: 12pt; }
   .body-section h3 { font-size: 11pt; }
-  .body-section p  { margin-bottom: 8pt; text-align: justify; }
-  .body-section ul, .body-section ol {
-    padding-left: 18pt;
-    margin-bottom: 8pt;
-  }
+  .body-section p { margin-bottom: 8pt; text-align: justify; padding-left: 13pt; padding-right: 13pt; }
+  .body-section ul, .body-section ol { padding-left: 18pt; margin-bottom: 8pt; }
   .body-section li { margin-bottom: 3pt; }
   .body-section strong { font-weight: bold; }
   .body-section em    { font-style: italic; }
-  /* citation superscripts */
-  sup.cite {
-    font-family: Arial, Helvetica, sans-serif;
-    font-size: 7pt;
-    font-weight: bold;
-  }
-  sup.cite a {
-    color: #0055aa;
-    text-decoration: none; /* superscripts don't need underline */
-    font-weight: bold;
-  }
-  /* ── References ── */
+  sup.cite { font-family: "Courier New", Courier, monospace; font-size: 7pt; }
+  sup.cite a { color: #c8401a; text-decoration: none; }
   .references-section {
-    border-top: 1.5pt solid #1a5f7a;
-    margin-top: 22pt;
+    border-top: 1.5pt solid #c8401a;
+    margin-top: 24pt;
     padding-top: 12pt;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
   }
-  .references-section h2 {
-    font-family: Arial, Helvetica, sans-serif;
-    font-size: 11pt;
-    color: #1a5f7a;
-    margin-bottom: 10pt;
+  .ref-heading {
+    font-family: "Courier New", Courier, monospace;
+    font-size: 7pt;
+    letter-spacing: 3pt;
     text-transform: uppercase;
-    letter-spacing: 1pt;
+    color: #c8401a;
+    display: block;
+    margin-bottom: 10pt;
   }
   .ref-entry {
     display: flex;
-    gap: 8pt;
-    margin-bottom: 7pt;
-    font-size: 9pt;
+    gap: 10pt;
+    padding: 6pt 0;
+    font-size: 8.5pt;
     line-height: 1.45;
   }
+  .ref-entry + .ref-entry { border-top: 0.5pt solid #ddd9d3; }
   .ref-num {
     flex-shrink: 0;
-    font-weight: bold;
-    color: #1a5f7a;
-    min-width: 18pt;
+    font-family: "Courier New", Courier, monospace;
+    font-size: 8pt;
+    color: #c8401a;
+    min-width: 24pt;
+    text-align: right;
+    padding-top: 1pt;
   }
-  .ref-body { flex: 1; }
-  .ref-body a {
-    color: #0055aa;
-    text-decoration: underline;
-    word-break: break-all;
-  }
-  /* ── Print color fidelity ── */
-  @media print {
-    .report-header { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-    .references-section { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  }
+  .ref-body { flex: 1; color: #1e1e1e; }
+  .ref-body a { color: #0055aa; text-decoration: underline; word-break: break-all; }
 </style>
 </head>
 <body>
 
 <div class="report-header">
-  <span class="label">PubMed Research Report</span>
+  <span class="tool-label">PubMed Signal</span>
   <div class="question">{{.Question}}</div>
   <div class="meta">Generated {{.Date}} &nbsp;·&nbsp; Source: PubMed / NCBI</div>
 </div>
@@ -161,7 +148,7 @@ const fallbackTemplate = `<!DOCTYPE html>
 
 {{if .References}}
 <div class="references-section">
-  <h2>References</h2>
+  <span class="ref-heading">References</span>
   {{range .References}}
   <div class="ref-entry" id="ref-{{.Number}}">
     <span class="ref-num">[{{.Number}}]</span>

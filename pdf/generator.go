@@ -183,33 +183,48 @@ func convertSummary(summaryMD string, articles []ArticleRef) (string, []RefEntry
 		articleByPMID[a.PMID] = a
 	}
 
-	// Replace [PMID:N](url) with <sup class="cite"><a href="#ref-IDX">[IDX]</a></sup>
-	// and record the ordered reference list.
+	// Replace citation tags with superscript links and build the reference list.
+	// Handles all formats the LLM may emit:
+	//   [PMID:N](url)       — linked markdown form
+	//   [PMID:N]            — plain form (after guard processing strips the URL)
+	//   [PMID:N, M, ...]    — comma-grouped form
 	var refs []RefEntry
 	pmidToIdx := make(map[string]int)
 
-	citationRe := regexp.MustCompile(`\[PMID:(\d+)\]\(https?://[^\)]+\)`)
+	addRef := func(pmid string) int {
+		if idx, seen := pmidToIdx[pmid]; seen {
+			return idx
+		}
+		idx := len(refs) + 1
+		pmidToIdx[pmid] = idx
+		a := articleByPMID[pmid]
+		refs = append(refs, RefEntry{
+			Number:  idx,
+			PMID:    pmid,
+			Title:   a.Title,
+			Journal: a.Journal,
+			Date:    a.Date,
+			URL:     "https://pubmed.ncbi.nlm.nih.gov/" + pmid + "/",
+		})
+		return idx
+	}
+
+	citationRe := regexp.MustCompile(`\[PMID:([\d,\s]+)\](?:\([^)]*\))?`)
 	processed := citationRe.ReplaceAllStringFunc(summaryMD, func(match string) string {
 		sub := citationRe.FindStringSubmatch(match)
 		if len(sub) < 2 {
 			return match
 		}
-		pmid := sub[1]
-		idx, seen := pmidToIdx[pmid]
-		if !seen {
-			idx = len(refs) + 1
-			pmidToIdx[pmid] = idx
-			a := articleByPMID[pmid]
-			refs = append(refs, RefEntry{
-				Number:  idx,
-				PMID:    pmid,
-				Title:   a.Title,
-				Journal: a.Journal,
-				Date:    a.Date,
-				URL:     "https://pubmed.ncbi.nlm.nih.gov/" + pmid + "/",
-			})
+		var result strings.Builder
+		for raw := range strings.SplitSeq(sub[1], ",") {
+			pmid := strings.TrimSpace(raw)
+			if pmid == "" {
+				continue
+			}
+			idx := addRef(pmid)
+			fmt.Fprintf(&result, `<sup class="cite"><a href="#ref-%d">[%d]</a></sup>`, idx, idx)
 		}
-		return fmt.Sprintf(`<sup class="cite"><a href="#ref-%d">[%d]</a></sup>`, idx, idx)
+		return result.String()
 	})
 
 	// Also strip the plain References section that the agent appends (we re-render it).

@@ -1,0 +1,6 @@
+.git
+reports/
+config.json
+*.tfstate
+*.tfstate.backup
+terraform.tfvars

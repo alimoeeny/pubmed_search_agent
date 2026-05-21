@@ -7,10 +7,10 @@
   "default_user": {
     "_comment": "google_api_key can be left empty here and set via GOOGLE_API_KEY env var instead.",
     "google_api_key": "",
-    "model_orchestrator": "gemini:gemini-2.5-pro-latest",
-    "model_validator": "gemini:gemini-2.0-flash-latest",
-    "model_planner": "gemini:gemini-2.0-flash-latest",
-    "model_default": "gemini:gemini-2.0-flash-latest",
+    "model_orchestrator": "gemini:gemini-2.5-pro-preview-05-06",
+    "model_validator": "gemini:gemini-2.0-flash",
+    "model_planner": "gemini:gemini-2.0-flash",
+    "model_default": "gemini:gemini-2.0-flash",
     "pdf_style_prompt": ""
   }
 }

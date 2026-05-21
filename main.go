@@ -16,11 +16,15 @@ import (
 	"google.golang.org/adk/tool"
 	"google.golang.org/genai"
 
+	adksession "google.golang.org/adk/session"
+
 	"github.com/alimoeeny/pubmed_search_agent/config"
 	"github.com/alimoeeny/pubmed_search_agent/guard"
 	"github.com/alimoeeny/pubmed_search_agent/pubmed"
+	agentsession "github.com/alimoeeny/pubmed_search_agent/session"
 	"github.com/alimoeeny/pubmed_search_agent/storage"
 	agenttools "github.com/alimoeeny/pubmed_search_agent/tools"
+	"github.com/alimoeeny/pubmed_search_agent/user"
 )
 
 func main() {
@@ -39,6 +43,22 @@ func main() {
 
 	// UserConfigProvider — swap for a DB-backed implementation for per-user overrides.
 	_ = config.NewStaticProvider(userCfg)
+
+	// --- Session service: Postgres when SUPABASE_DB_URL is set, in-memory otherwise ---
+	var sessionSvc adksession.Service
+	var userStore user.Store
+	if appCfg.SupabaseDBURL != "" {
+		pgSvc, err := agentsession.NewPostgresService(ctx, appCfg.SupabaseDBURL)
+		if err != nil {
+			log.Fatalf("Failed to connect to Supabase Postgres: %v", err)
+		}
+		sessionSvc = pgSvc
+		userStore = user.NewPostgresStore(pgSvc.Pool())
+		log.Printf("Session storage: Supabase Postgres")
+	} else {
+		sessionSvc = adksession.InMemoryService()
+		log.Printf("Session storage: in-memory (set SUPABASE_DB_URL for persistence)")
+	}
 
 	// --- Build per-role models ---
 	orchestratorModel, err := ModelFor(ctx, RoleOrchestrator, userCfg)
@@ -212,8 +232,10 @@ func main() {
 	}
 
 	launchCfg := &launcher.Config{
-		AgentLoader: agent.NewSingleLoader(researchAgent),
+		AgentLoader:    agent.NewSingleLoader(researchAgent),
+		SessionService: sessionSvc,
 	}
+	_ = userStore // used in Phase 5 HTTP handler
 
 	l := full.NewLauncher()
 	if err = l.Execute(ctx, launchCfg, os.Args[1:]); err != nil {

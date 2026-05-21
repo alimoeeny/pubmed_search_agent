@@ -8,20 +8,20 @@ import (
 	"google.golang.org/adk/tool/functiontool"
 
 	agentpdf "github.com/alimoeeny/pubmed_search_agent/pdf"
+	"github.com/alimoeeny/pubmed_search_agent/storage"
 )
 
 // PDFToolConfig holds runtime configuration for the generate_pdf tool.
 type PDFToolConfig struct {
-	OutDir          string // directory to write PDFs; created if absent
-	BaseDownloadURL string // base URL for download links, e.g. http://localhost:8081
-	StylePrompt     string // plain-English PDF style description; "" = built-in default
-	LLM             model.LLM
+	Backend     storage.StorageBackend // where to persist generated PDFs
+	StylePrompt string                 // plain-English PDF style description; "" = built-in default
+	LLM         model.LLM
 }
 
 // GeneratePDFArgs is the input schema for the generate_pdf tool.
 type GeneratePDFArgs struct {
-	Question string              `json:"question"` // the original research question
-	Summary  string              `json:"summary"`  // full markdown summary including References section
+	Question string                `json:"question"` // the original research question
+	Summary  string                `json:"summary"`  // full markdown summary including References section
 	Articles []agentpdf.ArticleRef `json:"articles"` // articles fetched during the session
 }
 
@@ -48,9 +48,9 @@ func NewGeneratePDFTool(cfg PDFToolConfig) (tool.Tool, error) {
 			Question:    args.Question,
 			Summary:     args.Summary,
 			Articles:    args.Articles,
-			OutDir:      cfg.OutDir,
+			Backend:     cfg.Backend,
 			StylePrompt: cfg.StylePrompt,
-		}, cfg.BaseDownloadURL)
+		})
 		if err != nil {
 			return GeneratePDFResult{}, fmt.Errorf("generate_pdf: %w", err)
 		}

@@ -3,13 +3,13 @@ package tools_test
 import (
 	"testing"
 
+	"github.com/alimoeeny/pubmed_search_agent/storage"
 	agenttools "github.com/alimoeeny/pubmed_search_agent/tools"
 )
 
 func TestNewGeneratePDFTool_Construction(t *testing.T) {
 	tool, err := agenttools.NewGeneratePDFTool(agenttools.PDFToolConfig{
-		OutDir:          t.TempDir(),
-		BaseDownloadURL: "http://localhost:8081",
+		Backend: &storage.LocalBackend{Dir: t.TempDir(), BaseURL: "http://localhost:8081"},
 	})
 	if err != nil {
 		t.Fatalf("NewGeneratePDFTool failed: %v", err)

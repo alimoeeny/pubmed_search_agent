@@ -19,6 +19,7 @@ import (
 	"github.com/alimoeeny/pubmed_search_agent/config"
 	"github.com/alimoeeny/pubmed_search_agent/guard"
 	"github.com/alimoeeny/pubmed_search_agent/pubmed"
+	"github.com/alimoeeny/pubmed_search_agent/storage"
 	agenttools "github.com/alimoeeny/pubmed_search_agent/tools"
 )
 
@@ -86,29 +87,42 @@ func main() {
 		log.Fatalf("Failed to create ask_user tool: %v", err)
 	}
 
+	// --- PDF storage backend: GCS in production, local filesystem in dev ---
+	var pdfBackend storage.StorageBackend
+	if appCfg.PDFGCSBucket != "" {
+		pdfBackend, err = storage.NewGCSBackend(ctx, appCfg.PDFGCSBucket)
+		if err != nil {
+			log.Fatalf("Failed to create GCS storage backend: %v", err)
+		}
+		log.Printf("PDF storage: GCS bucket %q", appCfg.PDFGCSBucket)
+	} else {
+		pdfBackend = &storage.LocalBackend{
+			Dir:     appCfg.PDFOutputDir,
+			BaseURL: appCfg.PDFDownloadBaseURL,
+		}
+		log.Printf("PDF storage: local dir %q", appCfg.PDFOutputDir)
+		// Start a simple file server to serve generated PDFs for download.
+		if appCfg.PDFPort != "" {
+			go func() {
+				mux := http.NewServeMux()
+				fs := http.FileServer(http.Dir(appCfg.PDFOutputDir))
+				mux.Handle("/download/", http.StripPrefix("/download/", fs))
+				log.Printf("PDF download server listening on :%s (serving %s)", appCfg.PDFPort, appCfg.PDFOutputDir)
+				if serveErr := http.ListenAndServe(":"+appCfg.PDFPort, mux); serveErr != nil {
+					log.Printf("WARN: PDF file server stopped: %v", serveErr)
+				}
+			}()
+		}
+	}
+
 	// --- PDF report tool ---
 	pdfTool, err := agenttools.NewGeneratePDFTool(agenttools.PDFToolConfig{
-		OutDir:          appCfg.PDFOutputDir,
-		BaseDownloadURL: appCfg.PDFDownloadBaseURL,
-		StylePrompt:     userCfg.PDFStylePrompt,
-		LLM:             orchestratorModel,
+		Backend:     pdfBackend,
+		StylePrompt: userCfg.PDFStylePrompt,
+		LLM:         orchestratorModel,
 	})
 	if err != nil {
 		log.Fatalf("Failed to create generate_pdf tool: %v", err)
-	}
-
-	// Start a simple file server to serve generated PDFs for download.
-	// This runs on PDFPort and is separate from the ADK web server.
-	if appCfg.PDFPort != "" {
-		go func() {
-			mux := http.NewServeMux()
-			fs := http.FileServer(http.Dir(appCfg.PDFOutputDir))
-			mux.Handle("/download/", http.StripPrefix("/download/", fs))
-			log.Printf("PDF download server listening on :%s (serving %s)", appCfg.PDFPort, appCfg.PDFOutputDir)
-			if serveErr := http.ListenAndServe(":"+appCfg.PDFPort, mux); serveErr != nil {
-				log.Printf("WARN: PDF file server stopped: %v", serveErr)
-			}
-		}()
 	}
 
 	// --- Citation verifier + PMID guard: AfterModelCallback ---

@@ -10,7 +10,6 @@ import (
 	"html/template"
 	"log"
 	"os"
-	"path/filepath"
 	"regexp"
 	"strings"
 	"time"
@@ -22,6 +21,8 @@ import (
 	"github.com/yuin/goldmark/renderer/html"
 	"google.golang.org/adk/model"
 	"google.golang.org/genai"
+
+	"github.com/alimoeeny/pubmed_search_agent/storage"
 )
 
 // ArticleRef holds the metadata for a single article used in the PDF reference list.
@@ -35,10 +36,10 @@ type ArticleRef struct {
 // PDFRequest carries all inputs needed to generate a report PDF.
 type PDFRequest struct {
 	Question    string
-	Summary     string       // raw markdown summary from the agent
-	Articles    []ArticleRef // articles fetched for this session
-	OutDir      string       // directory to write the PDF file
-	StylePrompt string       // plain-English style description; "" = use fallback template
+	Summary     string                 // raw markdown summary from the agent
+	Articles    []ArticleRef           // articles fetched for this session
+	Backend     storage.StorageBackend // where to persist the PDF
+	StylePrompt string                 // plain-English style description; "" = use fallback template
 }
 
 // PDFResult is returned by Generator.Generate on success.
@@ -75,13 +76,9 @@ func NewGenerator(llm model.LLM) *Generator {
 	return &Generator{llm: llm}
 }
 
-// Generate produces a PDF report and saves it to req.OutDir.
-// It returns the file path and the download URL constructed from baseDownloadURL.
-func (g *Generator) Generate(ctx context.Context, req PDFRequest, baseDownloadURL string) (PDFResult, error) {
-	if err := os.MkdirAll(req.OutDir, 0o755); err != nil {
-		return PDFResult{}, fmt.Errorf("pdf: create output dir: %w", err)
-	}
-
+// Generate produces a PDF report and persists it via req.Backend.
+// It returns the file path and the download URL returned by the backend.
+func (g *Generator) Generate(ctx context.Context, req PDFRequest) (PDFResult, error) {
 	// 1. Resolve the HTML template (LLM-generated or built-in fallback).
 	tmpl, err := g.resolveTemplate(ctx, req.StylePrompt)
 	if err != nil {
@@ -130,15 +127,14 @@ func (g *Generator) Generate(ctx context.Context, req PDFRequest, baseDownloadUR
 		return PDFResult{}, fmt.Errorf("pdf: chromedp render: %w", err)
 	}
 
-	// 7. Write PDF to output directory.
+	// 7. Persist PDF via the storage backend.
 	filename := buildFilename(req.Question)
-	outPath := filepath.Join(req.OutDir, filename)
-	if err := os.WriteFile(outPath, pdfBytes, 0o644); err != nil {
-		return PDFResult{}, fmt.Errorf("pdf: write output: %w", err)
+	downloadURL, err := req.Backend.Save(ctx, filename, pdfBytes)
+	if err != nil {
+		return PDFResult{}, fmt.Errorf("pdf: save: %w", err)
 	}
 
-	downloadURL := strings.TrimRight(baseDownloadURL, "/") + "/download/" + filename
-	return PDFResult{FilePath: outPath, DownloadURL: downloadURL}, nil
+	return PDFResult{FilePath: filename, DownloadURL: downloadURL}, nil
 }
 
 // resolveTemplate returns a parsed *template.Template. If stylePrompt is non-empty

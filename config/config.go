@@ -36,9 +36,10 @@ type UserConfig struct {
 // (applied when no per-user override exists).
 type AppConfig struct {
 	NCBIEmail          string     `json:"ncbi_email"`
-	PDFOutputDir       string     `json:"pdf_output_dir"`
-	PDFDownloadBaseURL string     `json:"pdf_download_base_url"`
-	PDFPort            string     `json:"pdf_port"`
+	PDFOutputDir       string     `json:"pdf_output_dir"`        // used by LocalBackend
+	PDFDownloadBaseURL string     `json:"pdf_download_base_url"` // used by LocalBackend
+	PDFPort            string     `json:"pdf_port"`              // local file-server port; unused when GCS is active
+	PDFGCSBucket       string     `json:"pdf_gcs_bucket"`        // when set, use GCS instead of local FS
 	DefaultUser        UserConfig `json:"default_user"`
 }
 
@@ -103,6 +104,9 @@ func overlayEnvVars(cfg *AppConfig) {
 	}
 	if v := os.Getenv("PDF_PORT"); v != "" {
 		cfg.PDFPort = v
+	}
+	if v := os.Getenv("PDF_GCS_BUCKET"); v != "" {
+		cfg.PDFGCSBucket = v
 	}
 	if v := os.Getenv("GOOGLE_API_KEY"); v != "" {
 		cfg.DefaultUser.GoogleAPIKey = v

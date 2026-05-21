@@ -5,6 +5,8 @@ import (
 	"os"
 	"strings"
 	"testing"
+
+	"github.com/alimoeeny/pubmed_search_agent/storage"
 )
 
 func TestFallbackTemplateParsesAndExecutes(t *testing.T) {
@@ -125,19 +127,21 @@ func TestGeneratePDF_SkipWhenNoChrome(t *testing.T) {
 	}
 
 	outDir := t.TempDir()
+	backend := &storage.LocalBackend{Dir: outDir, BaseURL: "http://localhost:8081"}
 	gen := NewGenerator(nil) // no LLM needed; StylePrompt is empty
 	result, err := gen.Generate(t.Context(), PDFRequest{
 		Question: "Test question",
 		Summary:  "Summary with [PMID:12345678](https://pubmed.ncbi.nlm.nih.gov/12345678/).",
 		Articles: []ArticleRef{{PMID: "12345678", Title: "Test Paper", Journal: "Test J", Date: "2024"}},
-		OutDir:   outDir,
-	}, "http://localhost:8081")
+		Backend:  backend,
+	})
 	if err != nil {
 		t.Fatalf("Generate failed: %v", err)
 	}
-	info, statErr := os.Stat(result.FilePath)
+	filePath := outDir + "/" + result.FilePath
+	info, statErr := os.Stat(filePath)
 	if statErr != nil {
-		t.Fatalf("PDF file not found: %v", statErr)
+		t.Fatalf("PDF file not found at %s: %v", filePath, statErr)
 	}
 	if info.Size() == 0 {
 		t.Error("PDF file is empty")

@@ -239,7 +239,7 @@ func stripAgentReferencesSection(md string) string {
 func renderToPDF(ctx context.Context, fileURL string) ([]byte, error) {
 	allocCtx, cancelAlloc := chromedp.NewExecAllocator(ctx,
 		append(chromedp.DefaultExecAllocatorOptions[:],
-			chromedp.Flag("headless", true),
+			chromedp.Flag("headless", "new"), // new headless mode preserves hyperlinks in PrintToPDF
 			chromedp.Flag("disable-gpu", true),
 			chromedp.Flag("no-sandbox", true),
 			chromedp.Flag("disable-dev-shm-usage", true),
@@ -253,6 +253,7 @@ func renderToPDF(ctx context.Context, fileURL string) ([]byte, error) {
 	var pdfBuf []byte
 	if err := chromedp.Run(taskCtx,
 		chromedp.Navigate(fileURL),
+		chromedp.WaitReady("body", chromedp.ByQuery), // ensure page fully rendered before printing
 		chromedp.ActionFunc(func(ctx context.Context) error {
 			var err error
 			pdfBuf, _, err = page.PrintToPDF().

@@ -4,10 +4,11 @@ package pdf
 // not set or the LLM-generated template fails to parse.
 //
 // It uses Go html/template syntax. Required placeholders:
-//   {{.Question}}         — research question string
-//   {{.Date}}             — generation date (YYYY-MM-DD)
-//   {{.BodyHTML}}         — pre-rendered HTML body (marked safe)
-//   {{range .References}} — reference entries (.Number .Title .Journal .Date .URL .PMID)
+//
+//	{{.Question}}         — research question string
+//	{{.Date}}             — generation date (YYYY-MM-DD)
+//	{{.BodyHTML}}         — pre-rendered HTML body (marked safe)
+//	{{range .References}} — reference entries (.Number .Title .Journal .Date .URL .PMID)
 const fallbackTemplate = `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -24,6 +25,26 @@ const fallbackTemplate = `<!DOCTYPE html>
     line-height: 1.65;
     color: #1a1a1a;
     background: #fff;
+  }
+  /* ── Global link styles ── */
+  a {
+    color: #0055aa;
+    text-decoration: underline;
+  }
+  a:visited { color: #0055aa; }
+  /* ── Print: force link visibility + print URL after each ref link ── */
+  @media print {
+    a[href] {
+      color: #0055aa !important;
+      text-decoration: underline !important;
+    }
+    .ref-body a[href]::after {
+      content: " (" attr(href) ")";
+      font-size: 7.5pt;
+      color: #555;
+      word-break: break-all;
+      font-style: normal;
+    }
   }
   /* ── Header ── */
   .report-header {
@@ -79,10 +100,13 @@ const fallbackTemplate = `<!DOCTYPE html>
   sup.cite {
     font-family: Arial, Helvetica, sans-serif;
     font-size: 7pt;
-    color: #1a5f7a;
     font-weight: bold;
   }
-  sup.cite a { color: #1a5f7a; text-decoration: none; }
+  sup.cite a {
+    color: #0055aa;
+    text-decoration: none; /* superscripts don't need underline */
+    font-weight: bold;
+  }
   /* ── References ── */
   .references-section {
     border-top: 1.5pt solid #1a5f7a;
@@ -111,8 +135,12 @@ const fallbackTemplate = `<!DOCTYPE html>
     min-width: 18pt;
   }
   .ref-body { flex: 1; }
-  .ref-body a { color: #1a5f7a; word-break: break-all; }
-  /* ── Footer ── */
+  .ref-body a {
+    color: #0055aa;
+    text-decoration: underline;
+    word-break: break-all;
+  }
+  /* ── Print color fidelity ── */
   @media print {
     .report-header { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     .references-section { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
@@ -139,7 +167,7 @@ const fallbackTemplate = `<!DOCTYPE html>
     <span class="ref-num">[{{.Number}}]</span>
     <span class="ref-body">
       {{.Title}}. <em>{{.Journal}}</em>. {{.Date}}.
-      PMID: <a href="{{.URL}}">{{.PMID}}</a>
+      <a href="{{.URL}}">PMID:&nbsp;{{.PMID}}</a>
     </span>
   </div>
   {{end}}

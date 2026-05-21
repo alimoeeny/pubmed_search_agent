@@ -19,11 +19,14 @@ REQUIRED Go html/template placeholders — you MUST include ALL of these exactly
   {{end}}               — closes the range loop
 
 CONSTRAINTS:
-- All CSS must be embedded in <style> tags — no external stylesheet URLs, no Google Fonts URLs
-- Print-optimized: include @page { size: A4; margin: 2cm } and @media print rules
-- Superscript citation numbers in the body are already formatted as [1], [2] etc — style them attractively
-- The references section must display each reference with its number, title, journal, date, and a link using .URL
-- Return ONLY the raw HTML document — no markdown code fences, no backticks, no explanation`
+- Self-contained: embed all CSS inline in <style> tags; no external URLs
+- Print-optimized: use @media print and @page { size: A4; margin: 2cm }
+- The BodyHTML section must render superscript citation numbers like [1], [2]
+- Hyperlinks MUST be visually obvious: a { color: #0055aa; text-decoration: underline; }
+- Include an @media print { a[href] { color: #0055aa !important; text-decoration: underline !important; } } rule
+- For reference list links, add a CSS rule to print the URL as visible text: .ref-body a[href]::after { content: " (" attr(href) ")"; font-size: 7.5pt; color: #555; }
+- Do NOT use pointer-events: none anywhere — all <a> tags must remain interactive
+- Return ONLY the raw HTML — no markdown code fences, no explanation`
 
 // buildTemplatePrompt returns the full LLM prompt for generating an HTML template
 // from the given plain-English style description.

@@ -120,6 +120,11 @@ resource "google_cloud_run_v2_service" "agent" {
         name  = "PDF_GCS_BUCKET"
         value = google_storage_bucket.pdfs.name
       }
+
+      env {
+        name  = "SERVER"
+        value = "true"
+      }
     }
 
     scaling {

@@ -1,10 +1,10 @@
 # PubMed Research Agent
 
-A Go ADK agent that accepts a biomedical research question, searches PubMed via the NCBI E-utilities API, and returns a human-readable summary with inline PMID citations.
+A Go service that accepts a biomedical research question, searches PubMed via the NCBI E-utilities API, and returns a human-readable summary with inline PMID citations. Runs as an interactive ADK web UI locally, or as a REST + SSE HTTP server for frontend integration.
 
 ## Architecture
 
-Single `llmagent` with five tools wired in sequence:
+Single `llmagent` with six tools:
 
 | Tool | Purpose |
 |------|---------|
@@ -13,42 +13,75 @@ Single `llmagent` with five tools wired in sequence:
 | `pubmed_search` | Runs esearch and returns PMIDs + total count |
 | `pubmed_fetch_details` | Fetches abstracts and metadata via efetch |
 | `ask_user` | Long-running HITL tool for clarifying vague or ambiguous questions |
+| `generate_pdf` | Generates a polished PDF report from the summary |
 
-A post-model callback (`pmid_guard`) strips any hallucinated `[PMID:N]` citations from the final summary — only PMIDs returned by `pubmed_fetch_details` survive.
+A post-model callback (`pmid_guard`) strips any hallucinated `[PMID:N]` citations — only PMIDs returned by `pubmed_fetch_details` survive.
 
 HTTP responses from NCBI are cached on disk for 7 days under `${XDG_CACHE_HOME:-$HOME/.cache}/pubmed_search_agent/v1/`.
+
+Session state is persisted in Supabase Postgres when `SUPABASE_DB_URL` is set; otherwise in-memory (lost on restart).
 
 ## Requirements
 
 - Go 1.26+
+- Chromium (`brew install chromium` on macOS) — required for PDF generation
 - A Google API key with Gemini access
+- Terraform + gcloud CLI — required for deployment only
 
 ## Environment Variables
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
-| `NCBI_EMAIL` | **yes** | — | Your email address (NCBI polite-access policy) |
-| `GOOGLE_API_KEY` | **yes** | — | Google API key for Gemini |
-| `PUBMED_AGENT_MODEL_ORCHESTRATOR` | no | `gemini:gemini-flash-latest` | Model spec for the orchestrator |
-| `PUBMED_AGENT_MODEL_VALIDATOR` | no | falls back to `PUBMED_AGENT_MODEL_DEFAULT` | Model spec for `validate_question` |
-| `PUBMED_AGENT_MODEL_PLANNER` | no | falls back to `PUBMED_AGENT_MODEL_DEFAULT` | Model spec for `plan_pubmed_query` |
-| `PUBMED_AGENT_MODEL_DEFAULT` | no | `gemini:gemini-flash-latest` | Default for any unset role |
-| `PUBMED_CACHE_DISABLE` | no | — | Set to `1` to disable on-disk HTTP caching |
+| `GOOGLE_API_KEY` | **Yes** | — | Gemini API key |
+| `NCBI_EMAIL` | **Yes** | — | Email sent to NCBI with every request (polite-access policy) |
+| `SUPABASE_JWT_SECRET` | No | — | HS256 secret; omit for dev mode (no auth) |
+| `SUPABASE_DB_URL` | No | — | Postgres connection URL; omit for in-memory sessions |
+| `CORS_ALLOWED_ORIGINS` | No | `*` | Comma-separated allowed origins for the HTTP server |
+| `PDF_GCS_BUCKET` | No | — | GCS bucket name for PDF storage; omit to store locally |
+| `SERVER` | No | — | Set to any non-empty value to start the REST+SSE server; unset = ADK web UI |
+| `PORT` | No | `8080` | HTTP listen port |
+| `PUBMED_AGENT_MODEL_DEFAULT` | No | `gemini:gemini-flash-latest` | Default model for all roles |
+| `PUBMED_AGENT_MODEL_ORCHESTRATOR` | No | — | Model override for the orchestrator |
+| `PUBMED_AGENT_MODEL_VALIDATOR` | No | — | Model override for `validate_question` |
+| `PUBMED_AGENT_MODEL_PLANNER` | No | — | Model override for `plan_pubmed_query` |
+| `PUBMED_CACHE_DISABLE` | No | — | Set to `1` to disable on-disk HTTP caching |
 
 Model specs use the format `provider:model-id`, e.g. `gemini:gemini-2.5-pro`.
 
-## Running
+## Running Locally
+
+### Mode 1 — ADK web UI (recommended for development and integration testing)
+
+The default mode. Starts the ADK-built-in chat interface at `http://localhost:8080`. No Supabase needed.
 
 ```bash
-export NCBI_EMAIL="you@example.com"
 export GOOGLE_API_KEY="your-key"
+export NCBI_EMAIL="you@example.com"
 
-# Interactive CLI
 go run .
-
-# Web UI
-go run . web api webui
+# Open http://localhost:8080 in your browser
 ```
+
+### Mode 2 — Custom REST + SSE server
+
+Used in production and for testing the API directly. Requires `SERVER` to be set.
+
+```bash
+export GOOGLE_API_KEY="your-key"
+export NCBI_EMAIL="you@example.com"
+export SERVER=true
+
+go run .
+# Listening on :8080
+
+# Quick smoke test (no token needed in dev mode)
+SESSION=$(curl -s -X POST http://localhost:8080/v1/sessions | jq -r .session_id)
+curl -N -X POST http://localhost:8080/v1/sessions/$SESSION/messages \
+  -H 'Content-Type: application/json' \
+  -d '{"text":"What is aspirin used for?"}'
+```
+
+See [`docs/developer-guide.md`](docs/developer-guide.md) for the full REST + SSE API reference.
 
 ## Running Tests
 
@@ -83,20 +116,29 @@ benefit across diverse populations [PMID:87654321].
 
 ```
 .
-├── main.go                  # Agent wiring, env validation, PMID guard callback
+├── main.go                  # Agent wiring, runner, server/launcher startup
 ├── model_factory.go         # Per-role LLM factory with env-var overrides
-├── guard/
-│   └── pmid_guard.go        # Hallucination guard — strips unverified PMIDs
-├── pubmed/
-│   ├── types.go             # Enums and domain types
-│   ├── client.go            # NCBI E-utilities HTTP client (rate-limited, retrying)
-│   ├── cache.go             # On-disk RoundTripper cache (7-day TTL)
-│   └── xml.go               # efetch XML parser
-└── tools/
-    ├── validate.go          # validate_question tool
-    ├── plan_query.go        # plan_pubmed_query tool
-    ├── search.go            # pubmed_search tool
-    ├── details.go           # pubmed_fetch_details tool
-    ├── ask_user.go          # ask_user HITL tool
-    └── llm_helper.go        # Shared LLM text-generation helper
+├── config/                  # AppConfig loading and env-var overrides
+├── guard/                   # PMID hallucination guard
+├── pubmed/                  # NCBI E-utilities client, cache, XML parser
+├── tools/                   # All ADK tools (validate, plan, search, details, ask_user, pdf)
+├── pdf/                     # PDF generation (Chromium renderer + GCS/local backend)
+├── storage/                 # StorageBackend interface (GCS + local implementations)
+├── session/                 # Postgres-backed ADK session.Service
+├── user/                    # User profile store (Postgres)
+├── server/
+│   ├── server.go            # Custom HTTP server — REST endpoints + SSE streaming
+│   ├── authz/               # Authorization checker (per-plan request limits)
+│   └── middleware/          # JWT auth + CORS middleware
+├── db/migrations/           # SQL migrations for Supabase Postgres
+├── infra/                   # Terraform — GCP resources (modules + prod/dev envs)
+├── .github/workflows/       # GitHub Actions CI/CD pipeline
+└── docs/
+    ├── developer-guide.md   # REST + SSE API reference for frontend engineers
+    └── deployment-guide.md  # Step-by-step first-deploy walkthrough
 ```
+
+## Further Reading
+
+- **[`docs/developer-guide.md`](docs/developer-guide.md)** — API reference, SSE event schema, auth, session lifecycle
+- **[`docs/deployment-guide.md`](docs/deployment-guide.md)** — deploying to GCP Cloud Run from scratch

@@ -13,14 +13,16 @@ import (
 	"google.golang.org/adk/cmd/launcher"
 	"google.golang.org/adk/cmd/launcher/full"
 	"google.golang.org/adk/model"
+	"google.golang.org/adk/runner"
+	adksession "google.golang.org/adk/session"
 	"google.golang.org/adk/tool"
 	"google.golang.org/genai"
-
-	adksession "google.golang.org/adk/session"
 
 	"github.com/alimoeeny/pubmed_search_agent/config"
 	"github.com/alimoeeny/pubmed_search_agent/guard"
 	"github.com/alimoeeny/pubmed_search_agent/pubmed"
+	agentserver "github.com/alimoeeny/pubmed_search_agent/server"
+	"github.com/alimoeeny/pubmed_search_agent/server/authz"
 	agentsession "github.com/alimoeeny/pubmed_search_agent/session"
 	"github.com/alimoeeny/pubmed_search_agent/storage"
 	agenttools "github.com/alimoeeny/pubmed_search_agent/tools"
@@ -231,16 +233,54 @@ func main() {
 		log.Fatalf("Failed to create agent: %v", err)
 	}
 
-	launchCfg := &launcher.Config{
-		AgentLoader:    agent.NewSingleLoader(researchAgent),
-		SessionService: sessionSvc,
+	// --- CLI mode: no SERVER env var → ADK built-in web UI (local dev / integration testing) ---
+	if os.Getenv("SERVER") == "" {
+		launchCfg := &launcher.Config{
+			AgentLoader:    agent.NewSingleLoader(researchAgent),
+			SessionService: sessionSvc,
+		}
+		l := full.NewLauncher()
+		if err = l.Execute(ctx, launchCfg, os.Args[1:]); err != nil {
+			log.Fatalf("Run failed: %v\n\n%s", err, l.CommandLineSyntax())
+		}
+		return
 	}
-	_ = userStore // used in Phase 5 HTTP handler
 
-	l := full.NewLauncher()
-	if err = l.Execute(ctx, launchCfg, os.Args[1:]); err != nil {
-		log.Fatalf("Run failed: %v\n\n%s", err, l.CommandLineSyntax())
+	// --- SERVER=true → custom HTTP server (auth, SSE, Postgres) ---
+
+	// --- Build ADK runner ---
+	agentRunner, err := runner.New(runner.Config{
+		AppName:        "pubmed_research_agent",
+		Agent:          researchAgent,
+		SessionService: sessionSvc,
+	})
+	if err != nil {
+		log.Fatalf("Failed to create runner: %v", err)
 	}
+
+	// --- Build authorization checker ---
+	var authzChecker authz.AuthorizationChecker = authz.NoOpChecker{}
+	if appCfg.SupabaseJWTSecret != "" {
+		authzChecker = &authz.PlanChecker{Limits: authz.DefaultPlanLimits}
+	}
+
+	// --- Start HTTP server ---
+	srv := agentserver.New(agentserver.Config{
+		AppName:      "pubmed_research_agent",
+		Runner:       agentRunner,
+		SessionSvc:   sessionSvc,
+		UserStore:    userStore,
+		AuthzChecker: authzChecker,
+		JWTSecret:    appCfg.SupabaseJWTSecret,
+		CORSOrigins:  appCfg.CORSAllowedOrigins,
+	})
+
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
+	}
+	log.Printf("Listening on :%s", port)
+	log.Fatal(http.ListenAndServe(":"+port, srv.Handler()))
 }
 
 // toStringSlice safely converts a session-state value to []string.

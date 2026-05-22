@@ -1,0 +1,13 @@
+# Copy this file to terraform.tfvars and fill in the values.
+# terraform.tfvars is git-ignored — never commit secret values.
+
+project_id  = "your-gcp-project-id"
+github_repo = "your-github-username/pubmed_search"
+image_tag   = "latest"
+
+secrets = {
+  GOOGLE_API_KEY       = "your-gemini-api-key"
+  NCBI_EMAIL           = "you@example.com"
+  SUPABASE_JWT_SECRET  = "your-supabase-jwt-secret"
+  SUPABASE_DB_URL      = "postgresql://postgres:password@db.ref.supabase.co:5432/postgres"
+}

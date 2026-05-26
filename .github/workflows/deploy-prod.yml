@@ -28,6 +28,12 @@ jobs:
       - name: Run tests
         run: go test -count=1 ./...
 
+  # Frontend (www/) is deployed via Cloudflare Pages Git integration.
+  # CF dashboard settings:
+  #   Build command : cd www && pnpm install && pnpm build --mode prod
+  #   Output dir    : www/dist
+  #   Branch        : main (production), all other branches get preview URLs
+
   deploy:
     name: Build & deploy to Cloud Run
     needs: test

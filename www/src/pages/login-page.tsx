@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Navigate } from 'react-router-dom'
+import { Navigate, useLocation } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
 import { z } from 'zod'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -19,6 +19,8 @@ type FormValues = z.infer<typeof schema>
 
 export function LoginPage() {
   const { session, loading, signInWithMagicLink } = useAuth()
+  const location = useLocation()
+  const from = (location.state as { from?: Location } | null)?.from?.pathname ?? '/'
   const [sent, setSent] = useState(false)
   const [lastEmail, setLastEmail] = useState('')
 
@@ -28,7 +30,7 @@ export function LoginPage() {
     formState: { errors, isSubmitting },
   } = useForm<FormValues>({ resolver: zodResolver(schema) })
 
-  if (!loading && session) return <Navigate to="/" replace />
+  if (!loading && session) return <Navigate to={from} replace />
 
   const onSubmit = async ({ email }: FormValues) => {
     try {

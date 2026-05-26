@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import type { Session, User } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabase'
 
@@ -27,7 +27,7 @@ export function useAuth(): AuthState {
     return () => listener.subscription.unsubscribe()
   }, [])
 
-  const signInWithMagicLink = async (email: string): Promise<void> => {
+  const signInWithMagicLink = useCallback(async (email: string): Promise<void> => {
     const { error } = await supabase.auth.signInWithOtp({
       email,
       options: {
@@ -35,12 +35,12 @@ export function useAuth(): AuthState {
       },
     })
     if (error) throw error
-  }
+  }, [])
 
-  const signOut = async (): Promise<void> => {
+  const signOut = useCallback(async (): Promise<void> => {
     const { error } = await supabase.auth.signOut()
     if (error) throw error
-  }
+  }, [])
 
   return {
     session,

@@ -12,11 +12,6 @@ dist
 dist-ssr
 *.local
 
-# Env files (contain secrets)
-.env.dev
-.env.prod
-.env.local
-
 # Test artifacts
 playwright-report/
 test-results/

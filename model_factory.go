@@ -20,6 +20,7 @@ const (
 	RoleOrchestrator ModelRole = "orchestrator"
 	RoleValidator    ModelRole = "validator"
 	RolePlanner      ModelRole = "planner"
+	RoleReviewer     ModelRole = "reviewer"
 )
 
 // Provider identifies the LLM provider.

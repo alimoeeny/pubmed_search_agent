@@ -75,6 +75,10 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to create planner model: %v", err)
 	}
+	reviewerModel, err := ModelFor(ctx, RoleReviewer, userCfg)
+	if err != nil {
+		log.Fatalf("Failed to create reviewer model: %v", err)
+	}
 
 	// --- Build NCBI client with caching ---
 	crt, err := pubmed.NewCachingRoundTripper(http.DefaultTransport)
@@ -107,6 +111,10 @@ func main() {
 	askUserTool, err := agenttools.NewAskUserTool()
 	if err != nil {
 		log.Fatalf("Failed to create ask_user tool: %v", err)
+	}
+	reviewTool, err := agenttools.NewReviewSummaryTool(reviewerModel)
+	if err != nil {
+		log.Fatalf("Failed to create review_summary tool: %v", err)
 	}
 
 	// --- PDF storage backend: GCS in production, local filesystem in dev ---
@@ -225,6 +233,7 @@ func main() {
 			searchTool,
 			detailsTool,
 			askUserTool,
+			reviewTool,
 			pdfTool,
 		},
 		AfterModelCallbacks: []llmagent.AfterModelCallback{pmidGuardCallback},
@@ -319,6 +328,23 @@ const agentInstruction = `You are a PubMed research assistant. Follow these step
      - [[XXXXXXXX](https://pubmed.ncbi.nlm.nih.gov/XXXXXXXX/)] Title — *Journal*, YYYY-MM-DD
    - Do NOT invent PMIDs, titles, or findings. Only cite PMIDs returned by pubmed_fetch_details.
    - If the abstracts do not contain enough information to answer the question, say so clearly.
+
+5a. REVIEW: Call review_summary with:
+    - question: the original research question (verbatim)
+    - summary: the full markdown summary text you just wrote (including the References section)
+
+    Interpret the result:
+    - If verdict == "SUFFICIENT" or loop_count >= 2: proceed directly to step 6.
+    - If verdict == "NEEDS_MORE_EVIDENCE" and loop_count < 2:
+        a. Call plan_pubmed_query. Set question to: the original question plus
+           " Focus on these gaps: " followed by the evidence_gaps joined with commas.
+           Also pass the suggested_query_refinement as additional context in the question.
+        b. Call pubmed_search with the new query plan.
+        c. Call pubmed_fetch_details on the new PMIDs.
+           - If pubmed_fetch_details returns no articles (all PMIDs already fetched this session),
+             PubMed has no more coverage — proceed directly to step 6 without re-summarizing.
+        d. Return to step 5: re-synthesize the summary using the now-larger article pool.
+           The PMID guard will validate citations on the new summary automatically.
 
 6. REPORT: After delivering the summary, ALWAYS call generate_pdf with:
    - question: the original research question (verbatim)

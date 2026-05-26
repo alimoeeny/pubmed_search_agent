@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "ticket": "local-review-refine-loop",
+  "ticketSource": "local",
+  "branch": "feature/review-refine-loop",
+  "project": "pubmed_search",
+  "targetDir": "/Users/ali/Documents/agents/pubmed_search",
+  "workflow": {
+    "currentStep": 0,
+    "status": "in_progress",
+    "blockedActions": [],
+    "nextAction": "implement"
+  },
+  "sessionRules": [],
+  "progress": {
+    "filesModified": [],
+    "testsStatus": {},
+    "completedTasks": 0,
+    "totalTasks": 5
+  }
+}

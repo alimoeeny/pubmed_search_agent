@@ -125,6 +125,11 @@ resource "google_cloud_run_v2_service" "agent" {
         name  = "SERVER"
         value = "true"
       }
+
+      env {
+        name  = "CORS_ALLOWED_ORIGINS"
+        value = var.cors_allowed_origins
+      }
     }
 
     scaling {

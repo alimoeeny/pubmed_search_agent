@@ -37,7 +37,7 @@ Session state is persisted in Supabase Postgres when `SUPABASE_DB_URL` is set; o
 | `NCBI_EMAIL` | **Yes** | — | Email sent to NCBI with every request (polite-access policy) |
 | `SUPABASE_JWT_SECRET` | No | — | HS256 secret; omit for dev mode (no auth) |
 | `SUPABASE_DB_URL` | No | — | Postgres connection URL; omit for in-memory sessions |
-| `CORS_ALLOWED_ORIGINS` | No | `*` | Comma-separated allowed origins for the HTTP server |
+| `CORS_ALLOWED_ORIGINS` | No | reflect any origin | Comma-separated allowed origins (e.g. `https://app.pages.dev`). Empty = reflect any requesting origin back, which supports credentialed (JWT) requests in dev. Set explicitly in prod. |
 | `PDF_GCS_BUCKET` | No | — | GCS bucket name for PDF storage; omit to store locally |
 | `SERVER` | No | — | Set to any non-empty value to start the REST+SSE server; unset = ADK web UI |
 | `PORT` | No | `8080` | HTTP listen port |

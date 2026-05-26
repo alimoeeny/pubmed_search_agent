@@ -87,6 +87,10 @@ project_id  = "<your-gcp-project-id>"
 github_repo = "<github-username>/<repo-name>"   # e.g. "alimoeeny/pubmed_search"
 image_tag   = "latest"
 
+# Your Cloudflare Pages URL(s) — the browser blocks credentialed (JWT) requests
+# unless the API echoes back the exact origin. Comma-separate multiple URLs.
+cors_allowed_origins = "https://your-app.pages.dev,https://app.pubmedagent.ai-goblins.com"
+
 secrets = {
   GOOGLE_API_KEY      = "<your-gemini-api-key>"
   NCBI_EMAIL          = "you@example.com"
@@ -174,6 +178,8 @@ curl -X POST $CLOUD_RUN_URL/v1/sessions \
 # Expected: {"session_id":"..."}
 ```
 
+> **CORS check:** open your Cloudflare Pages URL in the browser and open DevTools → Network. If you see `Access-Control-Allow-Origin` matching your Pages URL on API responses, CORS is configured correctly. If you see `*` or a missing header, double-check `cors_allowed_origins` in `terraform.tfvars` and re-apply.
+
 ---
 
 ## Subsequent deploys
@@ -204,3 +210,8 @@ Most common cause: a missing or incorrect secret in Secret Manager.
 
 **Supabase connection refused from Cloud Run**
 Ensure `SUPABASE_DB_URL` uses the **direct connection URI** (not the pooler URL). The pooler requires different TLS settings.
+
+**Browser blocks API calls with "CORS error" or "Network Error" from the frontend**
+The API must echo back the exact requesting origin (not `*`) for credentialed requests (`Authorization` header). Ensure `cors_allowed_origins` in `terraform.tfvars` contains your Cloudflare Pages URL exactly (no trailing slash). After updating, re-run `terraform apply` and redeploy.
+
+For local development (`SERVER=true`), leave `CORS_ALLOWED_ORIGINS` unset — the middleware will reflect any origin back automatically.

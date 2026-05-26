@@ -16,12 +16,13 @@ provider "google" {
 }
 
 module "pubmed" {
-  source      = "../../modules/pubmed-service"
-  project_id  = var.project_id
-  region      = "us-east1"
-  github_repo = var.github_repo
-  image_tag   = var.image_tag
-  secrets     = var.secrets
+  source               = "../../modules/pubmed-service"
+  project_id           = var.project_id
+  region               = "us-east1"
+  github_repo          = var.github_repo
+  image_tag            = var.image_tag
+  cors_allowed_origins = var.cors_allowed_origins
+  secrets              = var.secrets
 }
 
 output "workload_identity_provider" {

@@ -20,6 +20,12 @@ variable "image_tag" {
   default     = "latest"
 }
 
+variable "cors_allowed_origins" {
+  description = "Comma-separated list of allowed CORS origins for the API (e.g. your Cloudflare Pages URL). Empty = reflect any origin (dev only)."
+  type        = string
+  default     = ""
+}
+
 variable "secrets" {
   description = "Map of secret names to their values (never committed)"
   type        = map(string)

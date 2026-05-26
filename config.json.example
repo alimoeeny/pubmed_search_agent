@@ -4,7 +4,7 @@
   "pdf_output_dir": "./reports",
   "pdf_download_base_url": "http://localhost:8081",
   "pdf_port": "8081",
-  "cors_allowed_origins": "https://your-app.pages.dev,https://app.pubmedagent.ai-goblins.com",
+  "cors_allowed_origins": "https://your-app.pages.dev,https://pubmed.ai-goblins.com",
   "default_user": {
     "_comment": "google_api_key can be left empty here and set via GOOGLE_API_KEY env var instead.",
     "google_api_key": "",

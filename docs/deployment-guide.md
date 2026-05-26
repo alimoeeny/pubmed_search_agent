@@ -89,7 +89,7 @@ image_tag   = "latest"
 
 # Your Cloudflare Pages URL(s) — the browser blocks credentialed (JWT) requests
 # unless the API echoes back the exact origin. Comma-separate multiple URLs.
-cors_allowed_origins = "https://your-app.pages.dev,https://app.pubmedagent.ai-goblins.com"
+cors_allowed_origins = "https://your-app.pages.dev,https://pubmed.ai-goblins.com"
 
 secrets = {
   GOOGLE_API_KEY      = "<your-gemini-api-key>"

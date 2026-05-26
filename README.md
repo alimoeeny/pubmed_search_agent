@@ -4,7 +4,7 @@ A Go service that accepts a biomedical research question, searches PubMed via th
 
 ## Architecture
 
-Single `llmagent` with six tools:
+Single `llmagent` with seven tools:
 
 | Tool | Purpose |
 |------|---------|
@@ -12,10 +12,11 @@ Single `llmagent` with six tools:
 | `plan_pubmed_query` | Generates a structured boolean query with MeSH terms and filters |
 | `pubmed_search` | Runs esearch and returns PMIDs + total count |
 | `pubmed_fetch_details` | Fetches abstracts and metadata via efetch |
+| `review_summary` | Reviews the draft summary for citation coverage; triggers a gap-fill loop (≤2 rounds) |
 | `ask_user` | Long-running HITL tool for clarifying vague or ambiguous questions |
 | `generate_pdf` | Generates a polished PDF report from the summary |
 
-A post-model callback (`pmid_guard`) strips any hallucinated `[PMID:N]` citations — only PMIDs returned by `pubmed_fetch_details` survive.
+After writing the initial summary the agent calls `review_summary`, which scores citation coverage and returns evidence gaps. If the verdict is `NEEDS_MORE_EVIDENCE` the agent fetches additional articles and re-synthesises (up to 2 rounds). A post-model callback (`pmid_guard`) strips any hallucinated `[PMID:N]` citations — only PMIDs returned by `pubmed_fetch_details` survive.
 
 HTTP responses from NCBI are cached on disk for 7 days under `${XDG_CACHE_HOME:-$HOME/.cache}/pubmed_search_agent/v1/`.
 
@@ -40,7 +41,7 @@ Session state is persisted in Supabase Postgres when `SUPABASE_DB_URL` is set; o
 | `PDF_GCS_BUCKET` | No | — | GCS bucket name for PDF storage; omit to store locally |
 | `SERVER` | No | — | Set to any non-empty value to start the REST+SSE server; unset = ADK web UI |
 | `PORT` | No | `8080` | HTTP listen port |
-| `PUBMED_AGENT_MODEL_DEFAULT` | No | `gemini:gemini-flash-latest` | Default model for all roles |
+| `PUBMED_AGENT_MODEL_DEFAULT` | No | `gemini:gemini-3.5-flash` | Default model for all roles |
 | `PUBMED_AGENT_MODEL_ORCHESTRATOR` | No | — | Model override for the orchestrator |
 | `PUBMED_AGENT_MODEL_VALIDATOR` | No | — | Model override for `validate_question` |
 | `PUBMED_AGENT_MODEL_PLANNER` | No | — | Model override for `plan_pubmed_query` |
@@ -58,9 +59,11 @@ The default mode. Starts the ADK-built-in chat interface at `http://localhost:80
 export GOOGLE_API_KEY="your-key"
 export NCBI_EMAIL="you@example.com"
 
-go run .
+go run . web api --sse-write-timeout=10m webui
 # Open http://localhost:8080 in your browser
 ```
+
+> **Note:** The `--sse-write-timeout` flag belongs to the `api` sublauncher and must appear immediately after `api`. The default is 2 minutes, which is tight for queries that trigger the review/gap-fill loop. `10m` is a comfortable value for local development.
 
 ### Mode 2 — Custom REST + SSE server
 

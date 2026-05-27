@@ -20,6 +20,11 @@ variable "image_tag" {
   default     = "latest"
 }
 
+variable "supabase_url" {
+  description = "Supabase project URL, e.g. https://<ref>.supabase.co. Used to derive the JWKS endpoint for JWT verification."
+  type        = string
+}
+
 variable "cors_allowed_origins" {
   description = "Comma-separated list of allowed CORS origins for the API (e.g. your Cloudflare Pages URL). Empty = reflect any origin (dev only)."
   type        = string
@@ -30,5 +35,5 @@ variable "secrets" {
   description = "Map of secret names to their values (never committed)"
   type        = map(string)
   sensitive   = true
-  # Expected keys: GOOGLE_API_KEY, NCBI_EMAIL, SUPABASE_JWT_SECRET, SUPABASE_DB_URL
+  # Expected keys: SUPABASE_DB_URL
 }

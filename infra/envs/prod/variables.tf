@@ -11,6 +11,11 @@ variable "image_tag" {
   default = "latest"
 }
 
+variable "supabase_url" {
+  description = "Supabase project URL, e.g. https://<ref>.supabase.co"
+  type        = string
+}
+
 variable "cors_allowed_origins" {
   type    = string
   default = ""

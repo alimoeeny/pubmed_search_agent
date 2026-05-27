@@ -9,6 +9,11 @@ import (
 	"github.com/alimoeeny/pubmed_search_agent/pubmed"
 )
 
+// SessionKeyNCBIEmail is the session-state key that holds the authenticated
+// user's email for polite NCBI API usage. Seeded at session creation time by
+// the HTTP server; falls back to the client's built-in email in ADK web UI mode.
+const SessionKeyNCBIEmail = "ncbi_email"
+
 // SessionKeyFetchedPMIDs is the session-state key under which pubmed_fetch_details
 // accumulates the set of fetched PMIDs. Used by the PMID guard in main.go.
 const SessionKeyFetchedPMIDs = "fetched_pmids"
@@ -61,7 +66,7 @@ func NewPubmedFetchDetailsTool(client *pubmed.Client) (tool.Tool, error) {
 			return FetchResult{}, nil
 		}
 
-		xmlData, err := client.EFetch(ctx, pmids)
+		xmlData, err := client.WithEmail(ncbiEmailFromState(ctx, client.Email())).EFetch(ctx, pmids)
 		if err != nil {
 			return FetchResult{}, fmt.Errorf("pubmed_fetch_details: %w", err)
 		}

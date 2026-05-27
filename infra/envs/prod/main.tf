@@ -21,6 +21,7 @@ module "pubmed" {
   region               = "us-east1"
   github_repo          = var.github_repo
   image_tag            = var.image_tag
+  supabase_url         = var.supabase_url
   cors_allowed_origins = var.cors_allowed_origins
   secrets              = var.secrets
 }

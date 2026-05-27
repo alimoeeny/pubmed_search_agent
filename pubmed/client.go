@@ -55,6 +55,20 @@ func (c *Client) Close() {
 	c.limiter.Stop()
 }
 
+// Email returns the email address currently associated with this client.
+func (c *Client) Email() string {
+	return c.email
+}
+
+// WithEmail returns a shallow copy of the client with email replaced.
+// The HTTP client and rate limiter are shared with the original — safe for
+// concurrent use and avoids duplicate tickers.
+func (c *Client) WithEmail(email string) *Client {
+	cp := *c
+	cp.email = email
+	return &cp
+}
+
 // esearchResponse mirrors the relevant fields of the NCBI esearch JSON response.
 type esearchResponse struct {
 	ESearchResult struct {

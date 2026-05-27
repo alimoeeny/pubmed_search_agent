@@ -6,6 +6,7 @@ import (
 
 	"github.com/alimoeeny/pubmed_search_agent/pubmed"
 	"google.golang.org/adk/model"
+	"google.golang.org/adk/tool"
 )
 
 // toStringSliceAny safely converts any session-state value to []string.
@@ -43,6 +44,17 @@ func toArticleMapAny(v any) map[string]pubmed.Article {
 		return m
 	}
 	return make(map[string]pubmed.Article)
+}
+
+// ncbiEmailFromState reads the authenticated user's email from session state.
+// Falls back to fallback (the pubmed.Client's built-in email) when the key is
+// absent — e.g. in ADK web UI mode where no session state is seeded by the server.
+func ncbiEmailFromState(ctx tool.Context, fallback string) string {
+	v, _ := ctx.State().Get(SessionKeyNCBIEmail)
+	if s, ok := v.(string); ok && s != "" {
+		return s
+	}
+	return fallback
 }
 
 // generateText calls the LLM and returns the first text part from the response.

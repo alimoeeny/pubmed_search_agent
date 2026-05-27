@@ -9,7 +9,7 @@ terraform {
 
 locals {
   service_name = "pubmed-agent"
-  secret_names = ["GOOGLE_API_KEY", "NCBI_EMAIL", "SUPABASE_JWT_SECRET", "SUPABASE_DB_URL"]
+  secret_names = ["SUPABASE_DB_URL"]
 }
 
 # ── Artifact Registry ─────────────────────────────────────────────────────────
@@ -127,6 +127,11 @@ resource "google_cloud_run_v2_service" "agent" {
       }
 
       env {
+        name  = "SUPABASE_URL"
+        value = var.supabase_url
+      }
+
+      env {
         name  = "CORS_ALLOWED_ORIGINS"
         value = var.cors_allowed_origins
       }
@@ -139,6 +144,16 @@ resource "google_cloud_run_v2_service" "agent" {
   }
 
   depends_on = [google_secret_manager_secret_version.app_secrets]
+}
+
+# ── IAM: Cloud Run SA → Vertex AI ────────────────────────────────────────────
+# Grants the runtime service account permission to call Vertex AI (Gemini).
+# No API key is needed — the SDK uses ADC with this service account identity.
+
+resource "google_project_iam_member" "run_vertex_user" {
+  project = var.project_id
+  role    = "roles/aiplatform.user"
+  member  = "serviceAccount:${google_service_account.cloud_run.email}"
 }
 
 # ── Public invoker (JWT is our auth layer) ────────────────────────────────────

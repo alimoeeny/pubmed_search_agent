@@ -1,6 +1,6 @@
 # PubMed Agent — Deployment Guide
 
-Step-by-step guide to deploy the PubMed Agent to GCP Cloud Run from a brand new GCP project.
+Step-by-step guide to deploy the full PubMed Agent stack from scratch: Supabase auth + DB, GCP Cloud Run backend, and Cloudflare Pages frontend.
 
 ---
 
@@ -10,13 +10,46 @@ Before starting, make sure you have:
 
 - [ ] `gcloud` CLI installed and authenticated (`gcloud auth login`)
 - [ ] `terraform` >= 1.6 installed (`terraform -version`)
-- [ ] A GCP billing account (free trial works)
-- [ ] A [Supabase](https://supabase.com) account (free tier works)
+- [ ] GCP account with a billing account
+- [ ] [Supabase](https://supabase.com) account (free tier works)
+- [ ] [Cloudflare](https://cloudflare.com) account with `ai-goblins.com` already managed there
 - [ ] The repo cloned locally with all changes committed to `main`
 
 ---
 
-## Step 1 — Create a GCP project
+## Step 1 — Set up Supabase
+
+Supabase provides auth (JWT) and the Postgres session store. Both backend and frontend depend on it.
+
+1. Create a new project at [supabase.com](https://supabase.com) (free tier; pick a region close to `us-east1`)
+2. Wait ~2 minutes for the database to provision
+3. Apply the two migrations — use the **SQL Editor** tab in the dashboard, or via `psql`:
+
+```bash
+SUPABASE_DB_URL="postgresql://postgres:<password>@db.<ref>.supabase.co:5432/postgres"
+
+psql "$SUPABASE_DB_URL" -f db/migrations/001_create_user_profiles.sql
+psql "$SUPABASE_DB_URL" -f db/migrations/002_create_sessions.sql
+```
+
+4. Collect these values for later steps:
+
+| Value | Where to find it |
+|-------|------------------|
+| **JWT Secret** | Project Settings → API → JWT Secret |
+| **DB URL** | Project Settings → Database → Connection string → URI mode |
+| **Supabase URL** | Project Settings → API → Project URL |
+| **Anon Key** | Project Settings → API → Project API keys → `anon public` |
+
+> The Supabase URL and Anon Key are already hardcoded in `www/src/lib/config.ts`. You only need to update those constants if you created a brand new Supabase project.
+
+5. In the Supabase dashboard → **Authentication → URL Configuration**:
+   - **Site URL**: `https://pubmed.ai-goblins.com`
+   - **Redirect URLs**: add `https://pubmed.ai-goblins.com/auth/callback`
+
+---
+
+## Step 2 — Create a GCP project
 
 ```bash
 gcloud projects create <project-id> --name="PubMed Agent"
@@ -26,14 +59,14 @@ gcloud config set project <project-id>
 gcloud billing projects link <project-id> --billing-account=<billing-account-id>
 ```
 
-To find your billing account ID:
+Find your billing account ID:
 ```bash
 gcloud billing accounts list
 ```
 
 ---
 
-## Step 2 — Enable required GCP APIs
+## Step 3 — Enable required GCP APIs
 
 ```bash
 gcloud services enable \
@@ -46,29 +79,7 @@ gcloud services enable \
   storage.googleapis.com
 ```
 
-This takes ~1 minute. You only need to do this once per project.
-
----
-
-## Step 3 — Set up Supabase
-
-1. Create a new project at [supabase.com](https://supabase.com)
-2. Wait for the database to finish provisioning (~2 minutes)
-3. Apply the two migrations. You can run these in the **SQL Editor** tab in the Supabase dashboard, or via `psql`:
-
-```bash
-SUPABASE_DB_URL="postgresql://postgres:<password>@db.<ref>.supabase.co:5432/postgres"
-
-psql "$SUPABASE_DB_URL" -f db/migrations/001_create_user_profiles.sql
-psql "$SUPABASE_DB_URL" -f db/migrations/002_create_sessions.sql
-```
-
-4. Copy these two values — you'll need them for Terraform:
-
-| Value | Where to find it |
-|-------|-----------------|
-| **JWT Secret** | Project Settings → API → JWT Secret |
-| **DB URL** | Project Settings → Database → Connection string → URI mode |
+Takes ~1 minute. One-time per project.
 
 ---
 
@@ -76,40 +87,34 @@ psql "$SUPABASE_DB_URL" -f db/migrations/002_create_sessions.sql
 
 ```bash
 cd infra/envs/prod
-
 cp terraform.tfvars.example terraform.tfvars
 ```
 
-Edit `terraform.tfvars` and fill in all values:
+Edit `terraform.tfvars`:
 
 ```hcl
-project_id  = "<your-gcp-project-id>"
-github_repo = "<github-username>/<repo-name>"   # e.g. "alimoeeny/pubmed_search"
-image_tag   = "latest"
-
-# Your Cloudflare Pages URL(s) — the browser blocks credentialed (JWT) requests
-# unless the API echoes back the exact origin. Comma-separate multiple URLs.
-cors_allowed_origins = "https://your-app.pages.dev,https://pubmed.ai-goblins.com"
+project_id           = "<your-gcp-project-id>"
+github_repo          = "<owner>/<repo>"          # e.g. "alimoeeny/pubmed_search"
+image_tag            = "latest"
+supabase_url         = "https://<ref>.supabase.co"
+cors_allowed_origins = "https://pubmed.ai-goblins.com"
 
 secrets = {
-  GOOGLE_API_KEY      = "<your-gemini-api-key>"
-  NCBI_EMAIL          = "you@example.com"
-  SUPABASE_JWT_SECRET = "<jwt-secret-from-step-3>"
-  SUPABASE_DB_URL     = "<db-url-from-step-3>"
+  SUPABASE_DB_URL = "<db-url-from-step-1>"
 }
 ```
 
-> `terraform.tfvars` is git-ignored. Never commit it.
+> **No API key required.** Terraform grants the Cloud Run service account `roles/aiplatform.user`, so the service calls Vertex AI (Gemini) using its own IAM identity — no `GOOGLE_API_KEY` secret needed. NCBI email is drawn from each authenticated user's Supabase profile at request time.
 
-Now initialise and apply:
+> `terraform.tfvars` is git-ignored. Never commit it.
 
 ```bash
 terraform init
-terraform plan    # review the 15 resources that will be created
-terraform apply   # type "yes" when prompted
+terraform plan     # review 15+ resources before applying
+terraform apply    # type "yes" when prompted
 ```
 
-Apply takes 2–3 minutes. When it finishes, **note the four outputs**:
+Apply takes 2–3 minutes (16 resources). **Note the four outputs** (or retrieve later with `terraform output`):
 
 ```
 workload_identity_provider = "projects/.../providers/github-provider"
@@ -118,100 +123,167 @@ artifact_registry_url      = "us-east1-docker.pkg.dev/<project>/pubmed-agent"
 cloud_run_url              = "https://pubmed-agent-xxxx-ue.a.run.app"
 ```
 
-You can retrieve them again at any time with:
-```bash
-terraform output
-```
-
 ---
 
 ## Step 5 — Configure GitHub repository secrets
 
-In your GitHub repo go to **Settings → Secrets and variables → Actions** and add these three **repository secrets**:
+In **Settings → Secrets and variables → Actions**, add three **repository secrets**:
 
-| Secret name | Value |
-|-------------|-------|
+| Secret | Value |
+|--------|-------|
 | `GCP_PROJECT_ID` | Your GCP project ID |
 | `WIF_PROVIDER` | `workload_identity_provider` output from Step 4 |
 | `WIF_SERVICE_ACCOUNT` | `github_actions_sa_email` output from Step 4 |
 
-Then go to **Settings → Environments** and create an environment named exactly **`production`**.
+In **Settings → Environments**, create an environment named exactly **`production`**.
 
-> The workflow file (`.github/workflows/deploy-prod.yml`) requires the `production` environment to exist before it will run the deploy job.
+> The workflow (`.github/workflows/deploy-prod.yml`) requires the `production` environment before the deploy job will run.
 
 ---
 
-## Step 6 — First deploy
-
-Push to `main` to trigger the pipeline:
+## Step 6 — First backend deploy
 
 ```bash
 git push origin main
 ```
 
-The GitHub Actions workflow runs two jobs in sequence:
+GitHub Actions runs two jobs:
+1. **test** — `go test ./...`; deploy is blocked if any test fails
+2. **deploy** — Docker build + push to Artifact Registry + Cloud Run deploy
 
-1. **test** — runs `go test ./...`; deploy is blocked if any test fails
-2. **deploy** — builds the Docker image, pushes to Artifact Registry, deploys to Cloud Run
+Watch at `https://github.com/<owner>/<repo>/actions`. First build: ~4 min. Subsequent: ~90 sec.
 
-Watch progress at:
+**Verify:**
+```bash
+CLOUD_RUN_URL=$(terraform -chdir=infra/envs/prod output -raw cloud_run_url)
+curl $CLOUD_RUN_URL/healthz   # expect HTTP 200
 ```
-https://github.com/<owner>/<repo>/actions
-```
-
-The first build takes ~3–4 minutes (Go module download + Docker layer cache is cold). Subsequent deploys are ~90 seconds.
 
 ---
 
-## Step 7 — Verify the deployment
+## Step 7 — Map custom backend domain (`api.pubmedagent.ai-goblins.com`)
+
+**7a. Create the Cloud Run domain mapping:**
+```bash
+gcloud run domain-mappings create \
+  --service pubmed-agent \
+  --domain api.pubmedagent.ai-goblins.com \
+  --region us-east1
+```
+
+**7b. Get the required DNS records:**
+```bash
+gcloud run domain-mappings describe \
+  --domain api.pubmedagent.ai-goblins.com \
+  --region us-east1
+```
+The output lists one or more DNS records (typically a CNAME to `ghs.googlehosted.com`).
+
+**7c. Add the record in Cloudflare DNS:**
+- Dashboard → ai-goblins.com → DNS → Add record
+- Type: `CNAME`, Name: `api.pubmedagent`, Target: `ghs.googlehosted.com`
+- **Proxy: OFF** (grey cloud — DNS only). Cloud Run manages TLS directly; Cloudflare proxy causes certificate conflicts.
+
+**7d. Verify (~5 min for DNS + Google cert provisioning):**
+```bash
+curl https://api.pubmedagent.ai-goblins.com/healthz   # expect HTTP 200
+```
+
+---
+
+## Step 8 — Deploy frontend via Cloudflare Pages
+
+**8a. Connect the repo:**
+Cloudflare Dashboard → **Pages** → Create a project → Connect to Git → select this repo
+
+**8b. Configure the build:**
+
+| Setting | Value |
+|---------|-------|
+| Framework preset | None |
+| Root directory | `www` |
+| Build command | `pnpm run build:prod` |
+| Build output directory | `dist` |
+| Environment variable | `NODE_VERSION` = `20` |
+
+**8c. Save and Deploy.**
+First deploy: ~2 minutes. App goes live at `https://<project-name>.pages.dev`.
+
+From this point, every push to `main` triggers an automatic Pages rebuild.
+
+---
+
+## Step 9 — Map custom frontend domain (`pubmed.ai-goblins.com`)
+
+- Cloudflare Pages → your project → **Custom domains** → Add a custom domain
+- Enter `pubmed.ai-goblins.com`
+- Since the domain is already managed by Cloudflare, the CNAME and TLS certificate are provisioned **automatically** — no manual DNS step needed
+- Active within ~1 minute
+
+---
+
+## Step 10 — End-to-end verification
 
 ```bash
-CLOUD_RUN_URL=$(terraform -chdir=infra/envs/prod output -raw cloud_run_url)
+# Backend health
+curl https://api.pubmedagent.ai-goblins.com/healthz
 
-# Health check
-curl $CLOUD_RUN_URL/healthz
-# Expected: HTTP 200
-
-# Create a session (JWT required in prod — use your Supabase access_token)
-curl -X POST $CLOUD_RUN_URL/v1/sessions \
+# Create a session (requires a Supabase access_token)
+curl -X POST https://api.pubmedagent.ai-goblins.com/v1/sessions \
   -H "Authorization: Bearer <supabase-access-token>"
 # Expected: {"session_id":"..."}
 ```
 
-> **CORS check:** open your Cloudflare Pages URL in the browser and open DevTools → Network. If you see `Access-Control-Allow-Origin` matching your Pages URL on API responses, CORS is configured correctly. If you see `*` or a missing header, double-check `cors_allowed_origins` in `terraform.tfvars` and re-apply.
+Open `https://pubmed.ai-goblins.com` in a browser:
+1. Sign in via Supabase auth
+2. Create a session and send a message
+3. Confirm SSE events arrive and text streams correctly
+
+**CORS check:** DevTools → Network → any `/v1/` request. The response must include:
+```
+Access-Control-Allow-Origin: https://pubmed.ai-goblins.com
+```
+If you see `*` or a missing header, verify `cors_allowed_origins` in `terraform.tfvars` matches exactly (no trailing slash) and re-apply Terraform.
 
 ---
 
 ## Subsequent deploys
 
-Every push to `main` triggers the full pipeline automatically. No manual steps needed.
-
-The pipeline always:
-1. Runs tests first — a failing test prevents deploy
-2. Builds a new image tagged with the git SHA
-3. Deploys the new revision to Cloud Run with zero downtime
+| What changed | How to deploy |
+|---|---|
+| Backend Go code | Push to `main` → GitHub Actions deploys automatically |
+| Frontend code | Push to `main` → Cloudflare Pages deploys automatically |
+| Terraform config | `cd infra/envs/prod && terraform apply` |
+| Secrets | Update value in `terraform.tfvars` → `terraform apply` |
 
 ---
 
 ## Troubleshooting
 
 **`terraform apply` fails with "API not enabled"**
-Re-run Step 2. GCP API enablement can take a few minutes to propagate.
+Re-run Step 3. Propagation can take a few minutes.
 
 **GitHub Actions "Permission denied" on Artifact Registry push**
-Verify `WIF_PROVIDER` and `WIF_SERVICE_ACCOUNT` secrets match the Terraform outputs exactly, including the full resource path.
+Verify `WIF_PROVIDER` and `WIF_SERVICE_ACCOUNT` match Terraform outputs exactly (full resource path including `projects/...`).
 
-**Cloud Run returns 500 on every request**
-Check Cloud Run logs:
+**Cloud Run returns 500**
+Check logs:
 ```bash
 gcloud run services logs read pubmed-agent --region=us-east1 --limit=50
 ```
-Most common cause: a missing or incorrect secret in Secret Manager.
+Most common cause: missing or incorrect Secret Manager value.
+
+**`api.pubmedagent.ai-goblins.com` returns SSL error**
+Ensure Cloudflare proxy is **OFF** (grey cloud) for that DNS record. Cloud Run manages its own TLS; an orange-cloud proxy creates a certificate conflict.
 
 **Supabase connection refused from Cloud Run**
-Ensure `SUPABASE_DB_URL` uses the **direct connection URI** (not the pooler URL). The pooler requires different TLS settings.
+Use the **direct connection URI** (not the pooler URL). Project Settings → Database → Connection string → URI mode (not "Connection pooling").
 
-**Browser blocks API calls with "CORS error" or "Network Error" from the frontend**
-The API must echo back the exact requesting origin (not `*`) for credentialed requests (`Authorization` header). Ensure `cors_allowed_origins` in `terraform.tfvars` contains your Cloudflare Pages URL exactly (no trailing slash). After updating, re-run `terraform apply` and redeploy.
+**Supabase auth redirect fails after sign-in**
+Confirm `https://pubmed.ai-goblins.com/auth/callback` is in the Supabase **Redirect URLs** list (Step 1).
 
-For local development (`SERVER=true`), leave `CORS_ALLOWED_ORIGINS` unset — the middleware will reflect any origin back automatically.
+**Browser CORS error on API calls**
+`cors_allowed_origins` in `terraform.tfvars` must equal `https://pubmed.ai-goblins.com` with no trailing slash. After changing: `terraform apply` then redeploy backend (`git push origin main`).
+
+**Cloudflare Pages build fails — pnpm not found**
+Add `NODE_VERSION = 20` as a Pages environment variable. Cloudflare auto-detects the package manager from `pnpm-lock.yaml` when the Node version is set explicitly.

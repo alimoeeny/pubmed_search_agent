@@ -1,54 +1,78 @@
 package middleware_test
 
 import (
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
 
+	"github.com/go-jose/go-jose/v4"
 	"github.com/golang-jwt/jwt/v5"
 
 	"github.com/alimoeeny/pubmed_search_agent/server/middleware"
 )
 
-const testSecret = "super-secret-test-key"
+const testKID = "test-kid"
 
-func makeJWT(t *testing.T, sub, email string, secret string, exp time.Time) string {
+func newTestKey(t *testing.T) (*ecdsa.PrivateKey, jose.JSONWebKeySet) {
 	t.Helper()
-	claims := jwt.MapClaims{
-		"sub":   sub,
-		"email": email,
-		"exp":   exp.Unix(),
-	}
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	raw, err := token.SignedString([]byte(secret))
+	priv, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
-		t.Fatalf("makeJWT: %v", err)
+		t.Fatalf("generating key: %v", err)
+	}
+	jwk := jose.JSONWebKey{Key: &priv.PublicKey, KeyID: testKID, Algorithm: "ES256", Use: "sig"}
+	return priv, jose.JSONWebKeySet{Keys: []jose.JSONWebKey{jwk}}
+}
+
+func jwksServer(t *testing.T, ks jose.JSONWebKeySet) string {
+	t.Helper()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(ks)
+	}))
+	t.Cleanup(srv.Close)
+	return srv.URL + "/.well-known/jwks.json"
+}
+
+func makeES256JWT(t *testing.T, sub, email string, key *ecdsa.PrivateKey, kid string, exp time.Time) string {
+	t.Helper()
+	claims := jwt.MapClaims{"sub": sub, "email": email, "exp": exp.Unix()}
+	token := jwt.NewWithClaims(jwt.SigningMethodES256, claims)
+	token.Header["kid"] = kid
+	raw, err := token.SignedString(key)
+	if err != nil {
+		t.Fatalf("makeES256JWT: %v", err)
 	}
 	return raw
 }
 
-func TestAuth_ValidToken_PassesThrough(t *testing.T) {
+func TestJWKSAuth_ValidToken_PassesThrough(t *testing.T) {
+	priv, ks := newTestKey(t)
 	var captured middleware.UserIdentity
-	handler := middleware.Auth(testSecret)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := middleware.JWKSAuth(jwksServer(t, ks))(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		captured, _ = middleware.UserIdentityFromContext(r.Context())
 	}))
 
-	raw := makeJWT(t, "user-uuid-123", "alice@example.com", testSecret, time.Now().Add(time.Hour))
+	raw := makeES256JWT(t, "user-uuid-123", "alice@example.com", priv, testKID, time.Now().Add(time.Hour))
 	req := httptest.NewRequest(http.MethodGet, "/v1/sessions", nil)
 	req.Header.Set("Authorization", "Bearer "+raw)
 	handler.ServeHTTP(httptest.NewRecorder(), req)
 
 	if captured.ID != "user-uuid-123" {
-		t.Errorf("expected user ID user-uuid-123, got %q", captured.ID)
+		t.Errorf("ID = %q, want user-uuid-123", captured.ID)
 	}
 	if captured.Email != "alice@example.com" {
-		t.Errorf("expected email alice@example.com, got %q", captured.Email)
+		t.Errorf("Email = %q, want alice@example.com", captured.Email)
 	}
 }
 
-func TestAuth_MissingHeader_Returns401(t *testing.T) {
-	handler := middleware.Auth(testSecret)(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+func TestJWKSAuth_MissingHeader_Returns401(t *testing.T) {
+	_, ks := newTestKey(t)
+	handler := middleware.JWKSAuth(jwksServer(t, ks))(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Error("inner handler should not be called")
 	}))
 
@@ -61,12 +85,13 @@ func TestAuth_MissingHeader_Returns401(t *testing.T) {
 	}
 }
 
-func TestAuth_ExpiredToken_Returns401(t *testing.T) {
-	handler := middleware.Auth(testSecret)(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+func TestJWKSAuth_ExpiredToken_Returns401(t *testing.T) {
+	priv, ks := newTestKey(t)
+	handler := middleware.JWKSAuth(jwksServer(t, ks))(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Error("inner handler should not be called")
 	}))
 
-	raw := makeJWT(t, "user-uuid-123", "alice@example.com", testSecret, time.Now().Add(-time.Minute))
+	raw := makeES256JWT(t, "user-uuid-123", "alice@example.com", priv, testKID, time.Now().Add(-time.Minute))
 	req := httptest.NewRequest(http.MethodGet, "/v1/sessions", nil)
 	req.Header.Set("Authorization", "Bearer "+raw)
 	rr := httptest.NewRecorder()
@@ -77,12 +102,17 @@ func TestAuth_ExpiredToken_Returns401(t *testing.T) {
 	}
 }
 
-func TestAuth_WrongSecret_Returns401(t *testing.T) {
-	handler := middleware.Auth(testSecret)(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+func TestJWKSAuth_WrongKey_Returns401(t *testing.T) {
+	_, ks := newTestKey(t)
+	wrongKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatalf("generating wrong key: %v", err)
+	}
+	handler := middleware.JWKSAuth(jwksServer(t, ks))(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		t.Error("inner handler should not be called")
 	}))
 
-	raw := makeJWT(t, "user-uuid-123", "alice@example.com", "wrong-secret", time.Now().Add(time.Hour))
+	raw := makeES256JWT(t, "user-uuid-123", "alice@example.com", wrongKey, testKID, time.Now().Add(time.Hour))
 	req := httptest.NewRequest(http.MethodGet, "/v1/sessions", nil)
 	req.Header.Set("Authorization", "Bearer "+raw)
 	rr := httptest.NewRecorder()

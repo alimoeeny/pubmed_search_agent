@@ -41,7 +41,7 @@ type AppConfig struct {
 	PDFPort            string     `json:"pdf_port"`              // local file-server port; unused when GCS is active
 	PDFGCSBucket       string     `json:"pdf_gcs_bucket"`        // when set, use GCS instead of local FS
 	SupabaseDBURL      string     `json:"supabase_db_url"`       // Postgres connection string; env: SUPABASE_DB_URL
-	SupabaseJWTSecret  string     `json:"supabase_jwt_secret"`   // HS256 secret; env: SUPABASE_JWT_SECRET
+	SupabaseURL        string     `json:"supabase_url"`          // project URL, e.g. https://<ref>.supabase.co; env: SUPABASE_URL
 	CORSAllowedOrigins string     `json:"cors_allowed_origins"`  // comma-separated origins; env: CORS_ALLOWED_ORIGINS
 	DefaultUser        UserConfig `json:"default_user"`
 }
@@ -114,8 +114,8 @@ func overlayEnvVars(cfg *AppConfig) {
 	if v := os.Getenv("SUPABASE_DB_URL"); v != "" {
 		cfg.SupabaseDBURL = v
 	}
-	if v := os.Getenv("SUPABASE_JWT_SECRET"); v != "" {
-		cfg.SupabaseJWTSecret = v
+	if v := os.Getenv("SUPABASE_URL"); v != "" {
+		cfg.SupabaseURL = v
 	}
 	if v := os.Getenv("CORS_ALLOWED_ORIGINS"); v != "" {
 		cfg.CORSAllowedOrigins = v
@@ -140,16 +140,15 @@ func overlayEnvVars(cfg *AppConfig) {
 	}
 }
 
-// validate returns an error if required fields are missing or malformed.
+// validate returns an error if any present fields are malformed.
+// NCBIEmail and GoogleAPIKey are optional:
+//   - NCBIEmail: required only in ADK web UI mode (SERVER=false); in server mode
+//     the authenticated user's email is used from session state.
+//   - GoogleAPIKey: required only for local dev without ADC; on Cloud Run the
+//     service account identity is used automatically via Vertex AI.
 func validate(cfg AppConfig) error {
-	if cfg.NCBIEmail == "" {
-		return errors.New("ncbi_email is required (set via config file or NCBI_EMAIL env var)")
-	}
-	if !strings.Contains(cfg.NCBIEmail, "@") {
+	if cfg.NCBIEmail != "" && !strings.Contains(cfg.NCBIEmail, "@") {
 		return fmt.Errorf("ncbi_email %q does not look like a valid email address", cfg.NCBIEmail)
-	}
-	if cfg.DefaultUser.GoogleAPIKey == "" {
-		return errors.New("google_api_key is required (set via config file default_user.google_api_key or GOOGLE_API_KEY env var)")
 	}
 	return nil
 }

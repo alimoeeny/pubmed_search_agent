@@ -16,6 +16,7 @@ import (
 
 	"github.com/alimoeeny/pubmed_search_agent/server/authz"
 	"github.com/alimoeeny/pubmed_search_agent/server/middleware"
+	agenttools "github.com/alimoeeny/pubmed_search_agent/tools"
 	"github.com/alimoeeny/pubmed_search_agent/user"
 )
 
@@ -26,7 +27,7 @@ type Config struct {
 	SessionSvc   adksession.Service
 	UserStore    user.Store // nil in dev mode (no Supabase)
 	AuthzChecker authz.AuthorizationChecker
-	JWTSecret    string // empty = dev mode, auth middleware skipped
+	SupabaseURL  string // e.g. https://<project>.supabase.co; used to derive JWKS endpoint
 	CORSOrigins  string // comma-separated; empty = wildcard
 }
 
@@ -40,16 +41,25 @@ func New(cfg Config) *Server {
 	return &Server{cfg: cfg}
 }
 
-// Handler returns the root http.Handler with CORS and auth middleware applied.
+// Handler returns the root http.Handler.
+// /healthz is public. All /v1/ routes require a valid Supabase JWT.
 func (s *Server) Handler() http.Handler {
-	mux := http.NewServeMux()
-	s.registerRoutes(mux)
+	apiMux := http.NewServeMux()
+	s.registerRoutes(apiMux)
 
-	var h http.Handler = mux
-	if s.cfg.JWTSecret != "" {
-		h = middleware.Auth(s.cfg.JWTSecret)(h)
+	var apiHandler http.Handler = apiMux
+	if s.cfg.SupabaseURL != "" {
+		jwksURL := s.cfg.SupabaseURL + "/auth/v1/.well-known/jwks.json"
+		apiHandler = middleware.JWKSAuth(jwksURL)(apiHandler)
 	}
-	return middleware.CORS(s.cfg.CORSOrigins)(h)
+
+	root := http.NewServeMux()
+	root.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+	root.Handle("/", apiHandler)
+
+	return middleware.CORS(s.cfg.CORSOrigins)(root)
 }
 
 func (s *Server) registerRoutes(mux *http.ServeMux) {
@@ -59,10 +69,6 @@ func (s *Server) registerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("DELETE /v1/sessions/{id}", s.handleDeleteSession)
 	mux.HandleFunc("POST /v1/sessions/{id}/messages", s.handlePostMessage)
 	mux.HandleFunc("GET /v1/sessions/{id}/stream", s.handleStreamSession)
-
-	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	})
 }
 
 // ─── Route handlers ───────────────────────────────────────────────────────────
@@ -79,6 +85,7 @@ func (s *Server) handleCreateSession(w http.ResponseWriter, r *http.Request) {
 	resp, err := s.cfg.SessionSvc.Create(r.Context(), &adksession.CreateRequest{
 		AppName: s.cfg.AppName,
 		UserID:  identity.ID,
+		State:   map[string]any{agenttools.SessionKeyNCBIEmail: identity.Email},
 	})
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to create session")
@@ -438,10 +445,10 @@ func (req postMessageRequest) toContent() (*genai.Content, error) {
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 // requireIdentity extracts UserIdentity from context (set by auth middleware).
-// In dev mode (no JWT secret configured), it returns a synthetic identity so
+// In dev mode (no SupabaseURL configured), it returns a synthetic identity so
 // local testing works without a real Supabase project.
 func (s *Server) requireIdentity(w http.ResponseWriter, r *http.Request) middleware.UserIdentity {
-	if s.cfg.JWTSecret == "" {
+	if s.cfg.SupabaseURL == "" {
 		return middleware.UserIdentity{ID: "dev-user", Email: "dev@localhost"}
 	}
 	identity, ok := middleware.UserIdentityFromContext(r.Context())

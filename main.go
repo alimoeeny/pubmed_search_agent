@@ -256,6 +256,12 @@ func main() {
 	}
 
 	// --- SERVER=true → custom HTTP server (auth, SSE, Postgres) ---
+	if appCfg.SupabaseURL == "" {
+		log.Fatal("SERVER mode requires SUPABASE_URL — refusing to start without authentication")
+	}
+
+	// --- Build authorization checker ---
+	authzChecker := authz.AuthorizationChecker(&authz.PlanChecker{Limits: authz.DefaultPlanLimits})
 
 	// --- Build ADK runner ---
 	agentRunner, err := runner.New(runner.Config{
@@ -267,12 +273,6 @@ func main() {
 		log.Fatalf("Failed to create runner: %v", err)
 	}
 
-	// --- Build authorization checker ---
-	var authzChecker authz.AuthorizationChecker = authz.NoOpChecker{}
-	if appCfg.SupabaseJWTSecret != "" {
-		authzChecker = &authz.PlanChecker{Limits: authz.DefaultPlanLimits}
-	}
-
 	// --- Start HTTP server ---
 	srv := agentserver.New(agentserver.Config{
 		AppName:      "pubmed_research_agent",
@@ -280,7 +280,7 @@ func main() {
 		SessionSvc:   sessionSvc,
 		UserStore:    userStore,
 		AuthzChecker: authzChecker,
-		JWTSecret:    appCfg.SupabaseJWTSecret,
+		SupabaseURL:  appCfg.SupabaseURL,
 		CORSOrigins:  appCfg.CORSAllowedOrigins,
 	})
 

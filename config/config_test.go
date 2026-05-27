@@ -42,11 +42,24 @@ func setEnv(t *testing.T, pairs ...string) {
 }
 
 func TestLoadAppConfig_Defaults(t *testing.T) {
+	// No config file, no env vars — should load successfully with defaults.
+	cfg, err := config.LoadAppConfig("/nonexistent/config.json")
+	if err != nil {
+		t.Fatalf("LoadAppConfig failed: %v", err)
+	}
+	if cfg.PDFOutputDir != "./reports" {
+		t.Errorf("PDFOutputDir = %q, want ./reports", cfg.PDFOutputDir)
+	}
+	if cfg.PDFPort != "8081" {
+		t.Errorf("PDFPort = %q, want 8081", cfg.PDFPort)
+	}
+}
+
+func TestLoadAppConfig_OptionalEnvVarsOverlay(t *testing.T) {
 	setEnv(t,
 		"NCBI_EMAIL", "test@example.com",
 		"GOOGLE_API_KEY", "test-key",
 	)
-	// No config file — should load defaults + env vars.
 	cfg, err := config.LoadAppConfig("/nonexistent/config.json")
 	if err != nil {
 		t.Fatalf("LoadAppConfig failed: %v", err)
@@ -57,20 +70,9 @@ func TestLoadAppConfig_Defaults(t *testing.T) {
 	if cfg.DefaultUser.GoogleAPIKey != "test-key" {
 		t.Errorf("GoogleAPIKey = %q, want test-key", cfg.DefaultUser.GoogleAPIKey)
 	}
-	if cfg.PDFOutputDir != "./reports" {
-		t.Errorf("PDFOutputDir = %q, want ./reports", cfg.PDFOutputDir)
-	}
-	if cfg.PDFPort != "8081" {
-		t.Errorf("PDFPort = %q, want 8081", cfg.PDFPort)
-	}
 }
 
 func TestLoadAppConfig_JSONFileLoaded(t *testing.T) {
-	setEnv(t,
-		"NCBI_EMAIL", "",
-		"GOOGLE_API_KEY", "",
-	)
-	// Unset env vars that would interfere.
 	os.Unsetenv("NCBI_EMAIL")
 	os.Unsetenv("GOOGLE_API_KEY")
 
@@ -133,23 +135,12 @@ func TestLoadAppConfig_EnvVarsOverrideFile(t *testing.T) {
 	}
 }
 
-func TestLoadAppConfig_ValidationFailsMissingEmail(t *testing.T) {
-	setEnv(t, "GOOGLE_API_KEY", "test-key")
-	os.Unsetenv("NCBI_EMAIL")
+func TestLoadAppConfig_ValidationRejectsMalformedEmail(t *testing.T) {
+	setEnv(t, "NCBI_EMAIL", "not-an-email")
 
 	_, err := config.LoadAppConfig("/nonexistent/config.json")
 	if err == nil {
-		t.Error("expected error for missing NCBI_EMAIL, got nil")
-	}
-}
-
-func TestLoadAppConfig_ValidationFailsMissingAPIKey(t *testing.T) {
-	setEnv(t, "NCBI_EMAIL", "test@example.com")
-	os.Unsetenv("GOOGLE_API_KEY")
-
-	_, err := config.LoadAppConfig("/nonexistent/config.json")
-	if err == nil {
-		t.Error("expected error for missing GOOGLE_API_KEY, got nil")
+		t.Error("expected error for malformed NCBI_EMAIL, got nil")
 	}
 }
 

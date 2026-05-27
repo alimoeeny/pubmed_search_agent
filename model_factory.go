@@ -76,10 +76,13 @@ func ModelFor(ctx context.Context, role ModelRole, cfg config.UserConfig) (model
 
 	switch spec.Provider {
 	case ProviderGemini:
-		if cfg.GoogleAPIKey == "" {
-			return nil, fmt.Errorf("role %q: GoogleAPIKey is empty in UserConfig", role)
+		// When GoogleAPIKey is set (local dev), use the Gemini Developer API.
+		// When empty (Cloud Run), pass nil so the SDK uses ADC / Vertex AI via IAM.
+		var clientCfg *genai.ClientConfig
+		if cfg.GoogleAPIKey != "" {
+			clientCfg = &genai.ClientConfig{APIKey: cfg.GoogleAPIKey}
 		}
-		m, err := gemini.NewModel(ctx, spec.ModelID, &genai.ClientConfig{APIKey: cfg.GoogleAPIKey})
+		m, err := gemini.NewModel(ctx, spec.ModelID, clientCfg)
 		if err != nil {
 			return nil, fmt.Errorf("role %q: creating Gemini model %q: %w", role, spec.ModelID, err)
 		}

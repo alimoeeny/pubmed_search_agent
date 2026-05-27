@@ -38,7 +38,7 @@ func NewPubmedSearchTool(client *pubmed.Client) (tool.Tool, error) {
 			Rationale:    args.Rationale,
 			MaxResults:   args.MaxResults,
 		}
-		result, err := client.ESearch(ctx, plan)
+		result, err := client.WithEmail(ncbiEmailFromState(ctx, client.Email())).ESearch(ctx, plan)
 		if err != nil {
 			return SearchResult{}, fmt.Errorf("pubmed_search: %w", err)
 		}

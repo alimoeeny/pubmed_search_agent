@@ -65,9 +65,17 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Deploy to Cloud Run
-        uses: google-github-actions/deploy-cloudrun@v2
-        with:
-          service: ${{ env.IMAGE }}
-          region:  ${{ env.REGION }}
-          image:   ${{ env.REGISTRY }}/${{ env.IMAGE }}:${{ github.sha }}
+      - name: Deploy to Cloud Run (update image only if service exists)
+        run: |
+          if gcloud run services describe ${{ env.IMAGE }} \
+               --region=${{ env.REGION }} \
+               --project=${{ secrets.GCP_PROJECT_ID }} \
+               --quiet 2>/dev/null; then
+            gcloud run deploy ${{ env.IMAGE }} \
+              --image=${{ env.REGISTRY }}/${{ env.IMAGE }}:${{ github.sha }} \
+              --region=${{ env.REGION }} \
+              --project=${{ secrets.GCP_PROJECT_ID }} \
+              --quiet
+          else
+            echo "Cloud Run service not yet created — Terraform will provision it on first apply."
+          fi

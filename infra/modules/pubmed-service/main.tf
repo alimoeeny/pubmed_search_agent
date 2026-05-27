@@ -83,9 +83,10 @@ resource "google_secret_manager_secret_iam_member" "run_access" {
 # ── Cloud Run v2 service ──────────────────────────────────────────────────────
 
 resource "google_cloud_run_v2_service" "agent" {
-  project  = var.project_id
-  name     = local.service_name
-  location = var.region
+  project             = var.project_id
+  name                = local.service_name
+  location            = var.region
+  deletion_protection = false
 
   template {
     service_account = google_service_account.cloud_run.email

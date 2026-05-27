@@ -44,7 +44,7 @@ GET    /v1/sessions/{id}/stream        → replay session history as SSE (page-r
 GET    /v1/sessions/{id}               → get session + event history (JSON)
 GET    /v1/sessions                    → list all sessions for the user
 DELETE /v1/sessions/{id}               → delete session
-GET    /healthz                        → liveness probe
+GET    /health                         → liveness probe
 ```
 
 Typical flow:

@@ -156,7 +156,7 @@ Watch at `https://github.com/<owner>/<repo>/actions`. First build: ~4 min. Subse
 **Verify:**
 ```bash
 CLOUD_RUN_URL=$(terraform -chdir=infra/envs/prod output -raw cloud_run_url)
-curl $CLOUD_RUN_URL/healthz   # expect HTTP 200
+curl $CLOUD_RUN_URL/health   # expect HTTP 200
 ```
 
 ---
@@ -186,7 +186,7 @@ The output lists one or more DNS records (typically a CNAME to `ghs.googlehosted
 
 **7d. Verify (~5 min for DNS + Google cert provisioning):**
 ```bash
-curl https://api.pubmedagent.ai-goblins.com/healthz   # expect HTTP 200
+curl https://api.pubmedagent.ai-goblins.com/health   # expect HTTP 200
 ```
 
 ---
@@ -226,7 +226,7 @@ From this point, every push to `main` triggers an automatic Pages rebuild.
 
 ```bash
 # Backend health
-curl https://api.pubmedagent.ai-goblins.com/healthz
+curl https://api.pubmedagent.ai-goblins.com/health
 
 # Create a session (requires a Supabase access_token)
 curl -X POST https://api.pubmedagent.ai-goblins.com/v1/sessions \

@@ -42,7 +42,8 @@ func New(cfg Config) *Server {
 }
 
 // Handler returns the root http.Handler.
-// /healthz is public. All /v1/ routes require a valid Supabase JWT.
+// /health is public. All /v1/ routes require a valid Supabase JWT.
+// Note: /healthz is intercepted by Google's *.run.app edge, so we use /health.
 func (s *Server) Handler() http.Handler {
 	apiMux := http.NewServeMux()
 	s.registerRoutes(apiMux)
@@ -54,7 +55,7 @@ func (s *Server) Handler() http.Handler {
 	}
 
 	root := http.NewServeMux()
-	root.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) {
+	root.HandleFunc("GET /health", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
 	root.Handle("/", apiHandler)

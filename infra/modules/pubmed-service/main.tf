@@ -128,6 +128,16 @@ resource "google_cloud_run_v2_service" "agent" {
       }
 
       env {
+        name  = "GOOGLE_CLOUD_PROJECT"
+        value = var.project_id
+      }
+
+      env {
+        name  = "VERTEX_LOCATION"
+        value = var.region
+      }
+
+      env {
         name  = "SUPABASE_URL"
         value = var.supabase_url
       }

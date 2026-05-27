@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"strings"
 
 	"google.golang.org/adk/model"
@@ -67,7 +68,6 @@ func resolveSpec(role ModelRole, cfg config.UserConfig) (ModelSpec, error) {
 }
 
 // ModelFor returns a model.LLM for the given role using the provided UserConfig.
-// All configuration is read from cfg — no os.Getenv calls.
 func ModelFor(ctx context.Context, role ModelRole, cfg config.UserConfig) (model.LLM, error) {
 	spec, err := resolveSpec(role, cfg)
 	if err != nil {
@@ -77,10 +77,22 @@ func ModelFor(ctx context.Context, role ModelRole, cfg config.UserConfig) (model
 	switch spec.Provider {
 	case ProviderGemini:
 		// When GoogleAPIKey is set (local dev), use the Gemini Developer API.
-		// When empty (Cloud Run), pass nil so the SDK uses ADC / Vertex AI via IAM.
+		// When empty (Cloud Run), use Vertex AI with ADC; the SDK requires the
+		// backend to be set explicitly — a nil config defaults to BackendGoogleAI.
 		var clientCfg *genai.ClientConfig
 		if cfg.GoogleAPIKey != "" {
 			clientCfg = &genai.ClientConfig{APIKey: cfg.GoogleAPIKey}
+		} else {
+			project := os.Getenv("GOOGLE_CLOUD_PROJECT")
+			location := os.Getenv("VERTEX_LOCATION")
+			if location == "" {
+				location = "us-east1"
+			}
+			clientCfg = &genai.ClientConfig{
+				Backend:  genai.BackendVertexAI,
+				Project:  project,
+				Location: location,
+			}
 		}
 		m, err := gemini.NewModel(ctx, spec.ModelID, clientCfg)
 		if err != nil {

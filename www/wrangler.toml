@@ -1,3 +1,5 @@
 name = "pubmed-search-agent"
-pages_build_output_dir = "./dist"
 compatibility_date = "2026-05-27"
+
+[assets]
+directory = "./dist"

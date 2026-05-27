@@ -86,7 +86,7 @@ resource "google_cloud_run_v2_service" "agent" {
   project             = var.project_id
   name                = local.service_name
   location            = var.region
-  deletion_protection = false
+  deletion_protection = true
 
   template {
     service_account = google_service_account.cloud_run.email

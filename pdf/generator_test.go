@@ -120,7 +120,10 @@ func TestStripMarkdownFences(t *testing.T) {
 }
 
 func TestGeneratePDF_SkipWhenNoChrome(t *testing.T) {
-	// Only run if Chrome/Chromium is available.
+	// Only run if Chrome/Chromium is available and not in a CI sandbox environment.
+	if os.Getenv("CI") != "" {
+		t.Skip("skipping PDF generation test in CI (Chrome sandbox restrictions)")
+	}
 	_, err := findChrome()
 	if err != nil {
 		t.Skip("Chrome/Chromium not found in PATH, skipping PDF generation test")

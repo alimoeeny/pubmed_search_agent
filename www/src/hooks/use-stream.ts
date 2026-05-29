@@ -51,6 +51,10 @@ function reducer(state: StreamState, action: StreamAction): StreamState {
         return { ...state, status: 'error', errorMessage: event.message, events: [...state.events, event] }
       }
       if (event.type === 'done') {
+        if (state.pendingAskUser !== null) {
+          // Streaming turn ended while waiting for user input — stay in awaiting_user.
+          return { ...state, history: [...state.history, ...state.events], events: [] }
+        }
         return { ...state, status: 'idle', history: [...state.history, ...state.events], events: [] }
       }
       return { ...state, events: [...state.events, event] }

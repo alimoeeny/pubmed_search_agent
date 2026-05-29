@@ -85,10 +85,11 @@ export function useStream(sessionId: string): UseStreamResult {
   const api = useApi()
   const [state, dispatch] = useReducer(reducer, initial)
   const abortRef = useRef<AbortController | null>(null)
+  const hydrateAbortRef = useRef<AbortController | null>(null)
 
   useEffect(() => {
     const controller = new AbortController()
-    abortRef.current = controller
+    hydrateAbortRef.current = controller
 
     async function hydrate() {
       try {

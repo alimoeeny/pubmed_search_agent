@@ -86,7 +86,7 @@ func ModelFor(ctx context.Context, role ModelRole, cfg config.UserConfig) (model
 			project := os.Getenv("GOOGLE_CLOUD_PROJECT")
 			location := os.Getenv("VERTEX_LOCATION")
 			if location == "" {
-				location = "us-east1"
+				location = "global"
 			}
 			clientCfg = &genai.ClientConfig{
 				Backend:  genai.BackendVertexAI,

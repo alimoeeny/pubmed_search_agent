@@ -122,9 +122,16 @@ export function useStream(sessionId: string): UseStreamResult {
           dispatch({ type: 'TURN_DONE' })
           return
         }
+        let cleanEnd = false
         for await (const event of parseSSE(res.body, controller.signal)) {
           dispatch({ type: 'EVENT', event })
-          if (event.type === 'done' || event.type === 'error') break
+          if (event.type === 'done' || event.type === 'error') {
+            cleanEnd = true
+            break
+          }
+        }
+        if (!cleanEnd) {
+          dispatch({ type: 'TURN_DONE' })
         }
       } catch (err) {
         if ((err as { name?: string }).name !== 'AbortError') {

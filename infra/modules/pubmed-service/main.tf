@@ -134,7 +134,7 @@ resource "google_cloud_run_v2_service" "agent" {
 
       env {
         name  = "VERTEX_LOCATION"
-        value = var.region
+        value = "global"
       }
 
       env {

@@ -14,7 +14,7 @@ export function SessionPage() {
   const navigate = useNavigate()
   const sessionId = id!
 
-  const { history, events, status, pendingAskUser, sendMessage, sendFunctionResponse, abort } =
+  const { history, events, status, pendingAskUser, errorMessage, sendMessage, sendFunctionResponse, abort } =
     useStream(sessionId)
 
   const [draft, setDraft] = useState('')
@@ -83,6 +83,12 @@ export function SessionPage() {
               event={pendingAskUser}
               onAnswer={sendFunctionResponse}
             />
+          )}
+
+          {status === 'error' && errorMessage && (
+            <div className="rounded-md border border-destructive/50 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+              {errorMessage}
+            </div>
           )}
         </div>
         <div ref={bottomRef} />

@@ -25,4 +25,9 @@ export type ErrorEvent = {
   message: string
 }
 
-export type SSEEvent = TextDeltaEvent | AskUserEvent | PDFReadyEvent | DoneEvent | ErrorEvent
+export type UserMessageEvent = {
+  type: 'user_message'
+  content: string
+}
+
+export type SSEEvent = TextDeltaEvent | UserMessageEvent | AskUserEvent | PDFReadyEvent | DoneEvent | ErrorEvent

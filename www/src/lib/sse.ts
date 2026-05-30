@@ -37,6 +37,11 @@ function parseLine(line: string): SSEEvent | null {
         type: 'pdf_ready',
         download_url: typeof obj['download_url'] === 'string' ? obj['download_url'] : '',
       }
+    case 'user_message':
+      return {
+        type: 'user_message',
+        content: typeof obj['content'] === 'string' ? obj['content'] : '',
+      }
     case 'done':
       return { type: 'done' }
     case 'error':

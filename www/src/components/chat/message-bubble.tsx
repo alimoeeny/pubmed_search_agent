@@ -22,6 +22,9 @@ function groupEvents(events: SSEEvent[]): MessageGroup[] {
         current = { role: 'agent', text: event.content }
         groups.push(current)
       }
+    } else if (event.type === 'user_message') {
+      current = { role: 'user', text: event.content }
+      groups.push(current)
     } else if (event.type === 'pdf_ready') {
       if (current?.role === 'agent') {
         current.pdfUrl = event.download_url

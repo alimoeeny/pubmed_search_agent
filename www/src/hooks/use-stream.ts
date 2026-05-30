@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useReducer, useRef } from 'react'
 import { useApi } from '@/lib/api-context'
 import { parseSSE } from '@/lib/sse'
-import type { AskUserEvent, SSEEvent } from '@/lib/types'
+import type { AskUserEvent, SSEEvent, UserMessageEvent } from '@/lib/types'
 
 export type StreamStatus = 'idle' | 'streaming' | 'awaiting_user' | 'error'
 
@@ -15,7 +15,7 @@ type StreamState = {
 
 type StreamAction =
   | { type: 'HYDRATE'; events: SSEEvent[] }
-  | { type: 'STREAM_START' }
+  | { type: 'STREAM_START'; userMessage?: string }
   | { type: 'EVENT'; event: SSEEvent }
   | { type: 'TURN_DONE' }
   | { type: 'ERROR'; message: string }
@@ -34,8 +34,14 @@ function reducer(state: StreamState, action: StreamAction): StreamState {
     case 'HYDRATE':
       return { ...state, history: action.events }
 
-    case 'STREAM_START':
-      return { ...state, status: 'streaming', events: [], pendingAskUser: null, errorMessage: null }
+    case 'STREAM_START': {
+      const base = { ...state, status: 'streaming' as const, events: [], pendingAskUser: null, errorMessage: null }
+      if (action.userMessage) {
+        const userEvent: UserMessageEvent = { type: 'user_message', content: action.userMessage }
+        return { ...base, events: [userEvent] }
+      }
+      return base
+    }
 
     case 'EVENT': {
       const event = action.event
@@ -115,12 +121,12 @@ export function useStream(sessionId: string): UseStreamResult {
   }, [sessionId, api])
 
   const runStream = useCallback(
-    async (body: Parameters<typeof api.postMessage>[1]) => {
+    async (body: Parameters<typeof api.postMessage>[1], userMessage?: string) => {
       if (abortRef.current) abortRef.current.abort()
       const controller = new AbortController()
       abortRef.current = controller
 
-      dispatch({ type: 'STREAM_START' })
+      dispatch({ type: 'STREAM_START', userMessage })
       try {
         const res = await api.postMessage(sessionId, body, controller.signal)
         if (!res.body) {
@@ -149,7 +155,7 @@ export function useStream(sessionId: string): UseStreamResult {
 
   const sendMessage = useCallback(
     (text: string) => {
-      void runStream({ text })
+      void runStream({ text }, text)
     },
     [runStream],
   )

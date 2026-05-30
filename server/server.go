@@ -270,6 +270,11 @@ func (s *Server) streamSSE(w http.ResponseWriter, r *http.Request, userID, sessi
 		flusher.Flush()
 	}
 
+	// sentPartialText tracks whether we emitted any partial text chunks in the current
+	// streaming sequence. Gemini's StreamingResponseAggregator emits both the incremental
+	// chunks (partial=true) and a final accumulated blob (partial=false). The accumulated
+	// blob is a duplicate of what we already streamed, so skip it when chunks were sent.
+	sentPartialText := false
 	for event, err := range s.cfg.Runner.Run(
 		r.Context(),
 		userID, sessionID, msg,
@@ -294,13 +299,19 @@ func (s *Server) streamSSE(w http.ResponseWriter, r *http.Request, userID, sessi
 		emitPDFReady(event, send)
 		// text_delta: streamed or final agent text
 		for _, p := range event.Content.Parts {
-			if p.Text != "" {
-				send(ssePayload{
-					Type:    sseTypeTextDelta,
-					Content: p.Text,
-					Partial: event.Partial,
-				})
+			if p.Text == "" {
+				continue
 			}
+			if event.Partial {
+				send(ssePayload{Type: sseTypeTextDelta, Content: p.Text, Partial: true})
+				sentPartialText = true
+			} else if !sentPartialText {
+				send(ssePayload{Type: sseTypeTextDelta, Content: p.Text, Partial: false})
+			}
+			// else: non-partial after partials → accumulated duplicate, skip
+		}
+		if !event.Partial {
+			sentPartialText = false
 		}
 	}
 	send(ssePayload{Type: sseTypeDone})

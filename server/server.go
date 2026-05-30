@@ -233,11 +233,12 @@ func (s *Server) handlePostMessage(w http.ResponseWriter, r *http.Request) {
 type sseEventType string
 
 const (
-	sseTypeTextDelta sseEventType = "text_delta"
-	sseTypeAskUser   sseEventType = "ask_user"
-	sseTypePDFReady  sseEventType = "pdf_ready"
-	sseTypeDone      sseEventType = "done"
-	sseTypeError     sseEventType = "error"
+	sseTypeTextDelta   sseEventType = "text_delta"
+	sseTypeUserMessage sseEventType = "user_message"
+	sseTypeAskUser     sseEventType = "ask_user"
+	sseTypePDFReady    sseEventType = "pdf_ready"
+	sseTypeDone        sseEventType = "done"
+	sseTypeError       sseEventType = "error"
 )
 
 type ssePayload struct {
@@ -341,6 +342,13 @@ func (s *Server) handleStreamSession(w http.ResponseWriter, r *http.Request) {
 
 	for ev := range resp.Session.Events().All() {
 		if ev.Author == "user" {
+			if ev.Content != nil {
+				for _, p := range ev.Content.Parts {
+					if p.Text != "" {
+						send(ssePayload{Type: sseTypeUserMessage, Content: p.Text})
+					}
+				}
+			}
 			continue
 		}
 		if len(ev.LongRunningToolIDs) > 0 {

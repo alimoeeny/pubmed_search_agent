@@ -288,8 +288,12 @@ func (s *Server) streamSSE(w http.ResponseWriter, r *http.Request, userID, sessi
 			continue
 		}
 		// ask_user HITL: long-running tool call — emit dedicated event and stop text emission.
+		// Skip partial=true: the runner emits the function call twice (partial then final);
+		// only emit on the final to avoid sending the prompt twice.
 		if len(event.LongRunningToolIDs) > 0 {
-			emitAskUser(event, send)
+			if !event.Partial {
+				emitAskUser(event, send)
+			}
 			continue
 		}
 		if event.Content == nil {

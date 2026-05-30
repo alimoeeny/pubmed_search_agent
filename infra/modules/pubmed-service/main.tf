@@ -54,6 +54,13 @@ resource "google_storage_bucket_iam_member" "run_pdf_admin" {
   member = "serviceAccount:${google_service_account.cloud_run.email}"
 }
 
+# Allows the Cloud Run SA to sign URLs for GCS objects via the IAM credentials API.
+resource "google_service_account_iam_member" "run_self_token_creator" {
+  service_account_id = google_service_account.cloud_run.name
+  role               = "roles/iam.serviceAccountTokenCreator"
+  member             = "serviceAccount:${google_service_account.cloud_run.email}"
+}
+
 # ── Secret Manager ────────────────────────────────────────────────────────────
 
 resource "google_secret_manager_secret" "app_secrets" {
@@ -120,6 +127,11 @@ resource "google_cloud_run_v2_service" "agent" {
       env {
         name  = "PDF_GCS_BUCKET"
         value = google_storage_bucket.pdfs.name
+      }
+
+      env {
+        name  = "SA_EMAIL"
+        value = google_service_account.cloud_run.email
       }
 
       env {

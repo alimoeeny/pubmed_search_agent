@@ -3,10 +3,13 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
+	"time"
 
 	"google.golang.org/adk/agent"
 	adksession "google.golang.org/adk/session"
@@ -20,6 +23,12 @@ import (
 	"github.com/alimoeeny/pubmed_search_agent/user"
 )
 
+// PDFSigner converts a stored GCS object URL to a time-limited signed download URL.
+type PDFSigner interface {
+	SignURL(ctx context.Context, filename string, expiry time.Duration) (string, error)
+	Bucket() string
+}
+
 // Config holds all dependencies for the HTTP server.
 type Config struct {
 	AppName      string
@@ -27,8 +36,9 @@ type Config struct {
 	SessionSvc   adksession.Service
 	UserStore    user.Store // nil in dev mode (no Supabase)
 	AuthzChecker authz.AuthorizationChecker
-	SupabaseURL  string // e.g. https://<project>.supabase.co; used to derive JWKS endpoint
-	CORSOrigins  string // comma-separated; empty = wildcard
+	SupabaseURL  string    // e.g. https://<project>.supabase.co; used to derive JWKS endpoint
+	CORSOrigins  string    // comma-separated; empty = wildcard
+	PDFSigner    PDFSigner // optional; nil = serve stored URL as-is (local dev)
 }
 
 // Server is the HTTP handler for the PubMed agent API.
@@ -300,7 +310,7 @@ func (s *Server) streamSSE(w http.ResponseWriter, r *http.Request, userID, sessi
 			continue
 		}
 		// pdf_ready: FunctionResponse from generate_pdf
-		emitPDFReady(event, send)
+		emitPDFReady(r.Context(), event, s.cfg.PDFSigner, send)
 		// text_delta: streamed or final agent text
 		for _, p := range event.Content.Parts {
 			if p.Text == "" {
@@ -373,7 +383,7 @@ func (s *Server) handleStreamSession(w http.ResponseWriter, r *http.Request) {
 		if ev.Content == nil {
 			continue
 		}
-		emitPDFReady(ev, send)
+		emitPDFReady(r.Context(), ev, s.cfg.PDFSigner, send)
 		for _, p := range ev.Content.Parts {
 			if p.Text != "" {
 				send(ssePayload{Type: sseTypeTextDelta, Content: p.Text, Partial: false})
@@ -413,7 +423,8 @@ func emitAskUser(event *adksession.Event, send func(ssePayload)) {
 }
 
 // emitPDFReady scans an event for a generate_pdf FunctionResponse and sends pdf_ready if found.
-func emitPDFReady(event *adksession.Event, send func(ssePayload)) {
+// If signer is non-nil, the stored plain GCS URL is converted to a time-limited signed URL.
+func emitPDFReady(ctx context.Context, event *adksession.Event, signer PDFSigner, send func(ssePayload)) {
 	if event.Content == nil {
 		return
 	}
@@ -423,6 +434,15 @@ func emitPDFReady(event *adksession.Event, send func(ssePayload)) {
 		}
 		url, _ := p.FunctionResponse.Response["download_url"].(string)
 		if url != "" {
+			if signer != nil {
+				prefix := "https://storage.googleapis.com/" + signer.Bucket() + "/"
+				if strings.HasPrefix(url, prefix) {
+					filename := url[len(prefix):]
+					if signed, err := signer.SignURL(ctx, filename, time.Hour); err == nil {
+						url = signed
+					}
+				}
+			}
 			send(ssePayload{Type: sseTypePDFReady, DownloadURL: url})
 		}
 		return

@@ -119,12 +119,14 @@ func main() {
 
 	// --- PDF storage backend: GCS in production, local filesystem in dev ---
 	var pdfBackend storage.StorageBackend
+	var gcsBackend *storage.GCSBackend
 	if appCfg.PDFGCSBucket != "" {
-		pdfBackend, err = storage.NewGCSBackend(ctx, appCfg.PDFGCSBucket)
+		gcsBackend, err = storage.NewGCSBackend(ctx, appCfg.PDFGCSBucket, appCfg.PDFSigningSA)
 		if err != nil {
 			log.Fatalf("Failed to create GCS storage backend: %v", err)
 		}
-		log.Printf("PDF storage: GCS bucket %q", appCfg.PDFGCSBucket)
+		pdfBackend = gcsBackend
+		log.Printf("PDF storage: GCS bucket %q (signing SA: %q)", appCfg.PDFGCSBucket, appCfg.PDFSigningSA)
 	} else {
 		pdfBackend = &storage.LocalBackend{
 			Dir:     appCfg.PDFOutputDir,
@@ -282,6 +284,7 @@ func main() {
 		AuthzChecker: authzChecker,
 		SupabaseURL:  appCfg.SupabaseURL,
 		CORSOrigins:  appCfg.CORSAllowedOrigins,
+		PDFSigner:    gcsBackend, // nil when running locally (no GCS)
 	})
 
 	port := os.Getenv("PORT")

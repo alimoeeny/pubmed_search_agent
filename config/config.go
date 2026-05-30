@@ -40,6 +40,7 @@ type AppConfig struct {
 	PDFDownloadBaseURL string     `json:"pdf_download_base_url"` // used by LocalBackend
 	PDFPort            string     `json:"pdf_port"`              // local file-server port; unused when GCS is active
 	PDFGCSBucket       string     `json:"pdf_gcs_bucket"`        // when set, use GCS instead of local FS
+	PDFSigningSA       string     `json:"pdf_signing_sa"`        // SA email for signed GCS download URLs; env: SA_EMAIL
 	SupabaseDBURL      string     `json:"supabase_db_url"`       // Postgres connection string; env: SUPABASE_DB_URL
 	SupabaseURL        string     `json:"supabase_url"`          // project URL, e.g. https://<ref>.supabase.co; env: SUPABASE_URL
 	CORSAllowedOrigins string     `json:"cors_allowed_origins"`  // comma-separated origins; env: CORS_ALLOWED_ORIGINS
@@ -110,6 +111,9 @@ func overlayEnvVars(cfg *AppConfig) {
 	}
 	if v := os.Getenv("PDF_GCS_BUCKET"); v != "" {
 		cfg.PDFGCSBucket = v
+	}
+	if v := os.Getenv("SA_EMAIL"); v != "" {
+		cfg.PDFSigningSA = v
 	}
 	if v := os.Getenv("SUPABASE_DB_URL"); v != "" {
 		cfg.SupabaseDBURL = v

@@ -280,11 +280,10 @@ func (s *Server) streamSSE(w http.ResponseWriter, r *http.Request, userID, sessi
 		flusher.Flush()
 	}
 
-	// sentPartialText tracks whether we emitted any partial text chunks in the current
-	// streaming sequence. Gemini's StreamingResponseAggregator emits both the incremental
-	// chunks (partial=true) and a final accumulated blob (partial=false). The accumulated
-	// blob is a duplicate of what we already streamed, so skip it when chunks were sent.
-	sentPartialText := false
+	// partialTextBuffer tracks streamed text for the current aggregate. ADK can emit
+	// the same accumulated text again in a non-partial event, so skip that exact
+	// duplicate while preserving distinct non-partial progress or final messages.
+	partialTextBuffer := ""
 	for event, err := range s.cfg.Runner.Run(
 		r.Context(),
 		userID, sessionID, msg,
@@ -312,21 +311,26 @@ func (s *Server) streamSSE(w http.ResponseWriter, r *http.Request, userID, sessi
 		// pdf_ready: FunctionResponse from generate_pdf
 		emitPDFReady(r.Context(), event, s.cfg.PDFSigner, send)
 		// text_delta: streamed or final agent text
+		textParts := make([]string, 0, len(event.Content.Parts))
 		for _, p := range event.Content.Parts {
-			if p.Text == "" {
-				continue
+			if p.Text != "" {
+				textParts = append(textParts, p.Text)
 			}
-			if event.Partial {
-				send(ssePayload{Type: sseTypeTextDelta, Content: p.Text, Partial: true})
-				sentPartialText = true
-			} else if !sentPartialText {
-				send(ssePayload{Type: sseTypeTextDelta, Content: p.Text, Partial: false})
+		}
+		if event.Partial {
+			for _, text := range textParts {
+				send(ssePayload{Type: sseTypeTextDelta, Content: text, Partial: true})
+				partialTextBuffer += text
 			}
-			// else: non-partial after partials → accumulated duplicate, skip
+			continue
 		}
-		if !event.Partial {
-			sentPartialText = false
+
+		if partialTextBuffer == "" || strings.Join(textParts, "") != partialTextBuffer {
+			for _, text := range textParts {
+				send(ssePayload{Type: sseTypeTextDelta, Content: text, Partial: false})
+			}
 		}
+		partialTextBuffer = ""
 	}
 	send(ssePayload{Type: sseTypeDone})
 }

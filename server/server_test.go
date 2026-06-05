@@ -57,6 +57,32 @@ func TestPostMessageSkipsExactAccumulatedTextDuplicate(t *testing.T) {
 	}
 }
 
+func TestStripPDFDownloadLinksRemovesPlainGCSReportLinks(t *testing.T) {
+	t.Parallel()
+
+	input := strings.Join([]string{
+		"Summary stays.",
+		"",
+		"Download PDF report: [Open PDF](https://storage.googleapis.com/private-bucket/2026-06-05_report.pdf)",
+		"",
+		"References stay.",
+	}, "\n")
+
+	got := stripPDFDownloadLinks(input)
+
+	if strings.Contains(got, "storage.googleapis.com") {
+		t.Fatalf("plain GCS PDF URL was not stripped:\n%s", got)
+	}
+	if strings.Contains(got, "Download PDF report") {
+		t.Fatalf("PDF download line was not stripped:\n%s", got)
+	}
+	for _, want := range []string{"Summary stays.", "References stay."} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("sanitized text missing %q:\n%s", want, got)
+		}
+	}
+}
+
 func postMessageBody(t *testing.T, events func(agent.InvocationContext) []*adksession.Event) string {
 	t.Helper()
 

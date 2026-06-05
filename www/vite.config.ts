@@ -1,7 +1,9 @@
 import path from 'path'
-import { defineConfig } from 'vite'
+import { defineConfig, type UserConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
+
+type BuildRolldownOptions = NonNullable<NonNullable<UserConfig['build']>['rolldownOptions']>
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
@@ -12,8 +14,6 @@ export default defineConfig({
   },
   build: {
     chunkSizeWarningLimit: 600,
-    // advancedChunks is the current rolldown API for vendor splitting; rename to codeSplitting when rolldown types catch up
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     rolldownOptions: {
       output: {
         advancedChunks: {
@@ -26,6 +26,6 @@ export default defineConfig({
           ],
         },
       },
-    } as any,
+    } as unknown as BuildRolldownOptions,
   },
 })

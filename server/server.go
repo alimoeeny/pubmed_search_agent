@@ -313,8 +313,8 @@ func (s *Server) streamSSE(w http.ResponseWriter, r *http.Request, userID, sessi
 		// text_delta: streamed or final agent text
 		textParts := make([]string, 0, len(event.Content.Parts))
 		for _, p := range event.Content.Parts {
-			if p.Text != "" {
-				textParts = append(textParts, p.Text)
+			if text := stripPDFDownloadLinks(p.Text); text != "" {
+				textParts = append(textParts, text)
 			}
 		}
 		if event.Partial {
@@ -389,12 +389,29 @@ func (s *Server) handleStreamSession(w http.ResponseWriter, r *http.Request) {
 		}
 		emitPDFReady(r.Context(), ev, s.cfg.PDFSigner, send)
 		for _, p := range ev.Content.Parts {
-			if p.Text != "" {
-				send(ssePayload{Type: sseTypeTextDelta, Content: p.Text, Partial: false})
+			if text := stripPDFDownloadLinks(p.Text); text != "" {
+				send(ssePayload{Type: sseTypeTextDelta, Content: text, Partial: false})
 			}
 		}
 	}
 	send(ssePayload{Type: sseTypeDone})
+}
+
+func stripPDFDownloadLinks(text string) string {
+	if !strings.Contains(text, "storage.googleapis.com") || !strings.Contains(strings.ToLower(text), ".pdf") {
+		return text
+	}
+
+	lines := strings.SplitAfter(text, "\n")
+	kept := make([]string, 0, len(lines))
+	for _, line := range lines {
+		lower := strings.ToLower(line)
+		if strings.Contains(lower, "https://storage.googleapis.com/") && strings.Contains(lower, ".pdf") {
+			continue
+		}
+		kept = append(kept, line)
+	}
+	return strings.Join(kept, "")
 }
 
 // emitAskUser extracts ask_user args from a long-running tool-call event and sends the SSE payload.

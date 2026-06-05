@@ -1,21 +1,31 @@
 import { useEffect, useRef, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { ArrowLeft, Send, Square } from 'lucide-react'
+import { ArrowLeft, Download, FileText, Send, Square } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Skeleton } from '@/components/ui/skeleton'
-import { MessageBubble, groupEvents, type MessageGroup } from '@/components/chat/message-bubble'
+import { MessageBubble } from '@/components/chat/message-bubble'
 import { AskUserPrompt } from '@/components/chat/ask-user-prompt'
 import { useStream } from '@/hooks/use-stream'
+import { groupEvents, type MessageGroup } from '@/lib/chat-events'
+import type { SSEEvent } from '@/lib/types'
 
 export function SessionPage() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const sessionId = id!
 
-  const { history, events, status, pendingAskUser, errorMessage, sendMessage, sendFunctionResponse, abort } =
-    useStream(sessionId)
+  const {
+    history,
+    events,
+    status,
+    pendingAskUser,
+    errorMessage,
+    sendMessage,
+    sendFunctionResponse,
+    abort,
+  } = useStream(sessionId)
 
   const [draft, setDraft] = useState('')
   const bottomRef = useRef<HTMLDivElement>(null)
@@ -39,6 +49,7 @@ export function SessionPage() {
 
   const historyGroups: MessageGroup[] = groupEvents(history)
   const liveGroups: MessageGroup[] = groupEvents(events)
+  const artifacts = collectPDFArtifacts([...history, ...events])
 
   return (
     <div className="flex h-[calc(100vh-3.5rem)] flex-col">
@@ -54,45 +65,57 @@ export function SessionPage() {
         <span className="font-mono text-sm text-muted-foreground">…{sessionId.slice(-8)}</span>
       </div>
 
-      <ScrollArea className="flex-1 px-4 py-6">
-        {history.length === 0 && events.length === 0 && status === 'idle' && (
-          <div className="flex h-full flex-col items-center justify-center gap-2 text-center text-muted-foreground">
-            <p className="text-base font-medium">What would you like to research?</p>
-            <p className="text-sm">Ask a question and the agent will search PubMed for you.</p>
-          </div>
-        )}
-
-        {history.length === 0 && status === 'streaming' && events.length === 0 && (
-          <div className="space-y-2">
-            <Skeleton className="h-4 w-3/4" />
-            <Skeleton className="h-4 w-1/2" />
-          </div>
-        )}
-
-        <div className="space-y-4 max-w-3xl mx-auto">
-          {historyGroups.map((g, i) => (
-            <MessageBubble key={i} {...g} />
-          ))}
-
-          {isStreaming && liveGroups.map((g, i) => (
-            <MessageBubble key={`live-${i}`} {...g} streaming={i === liveGroups.length - 1} />
-          ))}
-
-          {isAwaitingUser && pendingAskUser && (
-            <AskUserPrompt
-              event={pendingAskUser}
-              onAnswer={sendFunctionResponse}
-            />
-          )}
-
-          {status === 'error' && errorMessage && (
-            <div className="rounded-md border border-destructive/50 bg-destructive/10 px-4 py-3 text-sm text-destructive">
-              {errorMessage}
+      <div className="flex min-h-0 flex-1">
+        <ScrollArea className="min-w-0 flex-1 px-4 py-6">
+          {history.length === 0 && events.length === 0 && status === 'idle' && (
+            <div className="flex h-full flex-col items-center justify-center gap-2 text-center text-muted-foreground">
+              <p className="text-base font-medium">What would you like to research?</p>
+              <p className="text-sm">Ask a question and the agent will search PubMed for you.</p>
             </div>
           )}
+
+          {history.length === 0 && status === 'streaming' && events.length === 0 && (
+            <div className="space-y-2">
+              <Skeleton className="h-4 w-3/4" />
+              <Skeleton className="h-4 w-1/2" />
+            </div>
+          )}
+
+          <div className="mx-auto max-w-3xl space-y-4">
+            {historyGroups.map((g, i) => (
+              <MessageBubble key={i} {...g} />
+            ))}
+
+            {isStreaming &&
+              liveGroups.map((g, i) => (
+                <MessageBubble key={`live-${i}`} {...g} streaming={i === liveGroups.length - 1} />
+              ))}
+
+            {isAwaitingUser && pendingAskUser && (
+              <AskUserPrompt event={pendingAskUser} onAnswer={sendFunctionResponse} />
+            )}
+
+            {status === 'error' && errorMessage && (
+              <div className="rounded-md border border-destructive/50 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+                {errorMessage}
+              </div>
+            )}
+          </div>
+          <div ref={bottomRef} />
+        </ScrollArea>
+
+        {artifacts.length > 0 && <ArtifactRail artifacts={artifacts} />}
+      </div>
+
+      {artifacts.length > 0 && (
+        <div className="border-t bg-background px-4 py-2 lg:hidden">
+          <div className="mx-auto flex max-w-3xl gap-2 overflow-x-auto">
+            {artifacts.map((artifact) => (
+              <ArtifactLink key={artifact.id} artifact={artifact} compact />
+            ))}
+          </div>
         </div>
-        <div ref={bottomRef} />
-      </ScrollArea>
+      )}
 
       <div className="border-t bg-background px-4 py-3">
         <div className="mx-auto flex max-w-3xl gap-2">
@@ -123,5 +146,78 @@ export function SessionPage() {
         </div>
       </div>
     </div>
+  )
+}
+
+type PDFArtifact = {
+  id: string
+  href: string
+  filename: string
+}
+
+function collectPDFArtifacts(events: SSEEvent[]): PDFArtifact[] {
+  const artifacts: PDFArtifact[] = []
+
+  for (const event of events) {
+    if (event.type !== 'pdf_ready' || event.download_url === '') continue
+    artifacts.push({
+      id: `pdf-${artifacts.length}-${event.download_url}`,
+      href: event.download_url,
+      filename: pdfFilename(event.download_url),
+    })
+  }
+
+  return artifacts
+}
+
+function pdfFilename(href: string): string {
+  try {
+    const url = new URL(href)
+    const filename = url.pathname.split('/').filter(Boolean).at(-1)
+    return filename ? decodeURIComponent(filename) : 'PDF report'
+  } catch {
+    return 'PDF report'
+  }
+}
+
+function ArtifactRail({ artifacts }: { artifacts: PDFArtifact[] }) {
+  return (
+    <aside className="hidden w-72 shrink-0 border-l bg-background/95 px-4 py-4 lg:block">
+      <div className="sticky top-4 space-y-3">
+        <div className="flex items-center gap-2 text-xs font-medium uppercase text-muted-foreground">
+          <FileText className="size-3.5" />
+          <span>Artifacts</span>
+        </div>
+        <div className="space-y-2">
+          {artifacts.map((artifact) => (
+            <ArtifactLink key={artifact.id} artifact={artifact} />
+          ))}
+        </div>
+      </div>
+    </aside>
+  )
+}
+
+function ArtifactLink({ artifact, compact = false }: { artifact: PDFArtifact; compact?: boolean }) {
+  return (
+    <a
+      href={artifact.href}
+      target="_blank"
+      rel="noopener noreferrer"
+      className={
+        compact
+          ? 'flex min-w-56 items-center gap-2 rounded-lg border bg-muted/40 px-3 py-2 text-sm transition-colors hover:bg-muted'
+          : 'flex items-center gap-3 rounded-lg border bg-muted/30 px-3 py-3 text-sm transition-colors hover:bg-muted'
+      }
+    >
+      <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-background text-muted-foreground">
+        <FileText className="size-4" />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block font-medium">PDF report</span>
+        <span className="block truncate text-xs text-muted-foreground">{artifact.filename}</span>
+      </span>
+      <Download className="size-4 shrink-0 text-muted-foreground" />
+    </a>
   )
 }

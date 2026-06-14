@@ -122,16 +122,47 @@ func (s *Server) handleListSessions(w http.ResponseWriter, r *http.Request) {
 
 	type sessionSummary struct {
 		ID          string `json:"session_id"`
+		Title       string `json:"title"`
 		LastUpdated string `json:"last_updated"`
 	}
 	out := make([]sessionSummary, 0, len(resp.Sessions))
 	for _, sess := range resp.Sessions {
+		title := firstUserQuestion(sess)
+		if title == "" {
+			full, err := s.cfg.SessionSvc.Get(r.Context(), &adksession.GetRequest{
+				AppName:   s.cfg.AppName,
+				UserID:    identity.ID,
+				SessionID: sess.ID(),
+			})
+			if err == nil {
+				title = firstUserQuestion(full.Session)
+			}
+		}
 		out = append(out, sessionSummary{
 			ID:          sess.ID(),
+			Title:       title,
 			LastUpdated: sess.LastUpdateTime().Format("2006-01-02T15:04:05Z"),
 		})
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"sessions": out})
+}
+
+func firstUserQuestion(sess adksession.Session) string {
+	for ev := range sess.Events().All() {
+		if ev.Author != "user" || ev.Content == nil {
+			continue
+		}
+		var parts []string
+		for _, part := range ev.Content.Parts {
+			if text := strings.TrimSpace(part.Text); text != "" {
+				parts = append(parts, text)
+			}
+		}
+		if len(parts) > 0 {
+			return strings.Join(strings.Fields(strings.Join(parts, " ")), " ")
+		}
+	}
+	return ""
 }
 
 func (s *Server) handleGetSession(w http.ResponseWriter, r *http.Request) {

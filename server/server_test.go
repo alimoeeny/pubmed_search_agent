@@ -1,6 +1,7 @@
 package server
 
 import (
+	"encoding/json"
 	"iter"
 	"net/http"
 	"net/http/httptest"
@@ -15,6 +16,68 @@ import (
 
 	"github.com/alimoeeny/pubmed_search_agent/server/authz"
 )
+
+func TestListSessionsIncludesFirstUserQuestionAsTitle(t *testing.T) {
+	t.Parallel()
+
+	const (
+		appName   = "test_app"
+		userID    = "dev-user"
+		sessionID = "test-session"
+	)
+
+	sessionSvc := adksession.InMemoryService()
+	created, err := sessionSvc.Create(t.Context(), &adksession.CreateRequest{
+		AppName:   appName,
+		UserID:    userID,
+		SessionID: sessionID,
+	})
+	if err != nil {
+		t.Fatalf("create session: %v", err)
+	}
+	for _, question := range []string{
+		"What are the cardiovascular effects of aspirin after STEMI?",
+		"Focus on randomized trials.",
+	} {
+		ev := adksession.NewEvent("test-invocation")
+		ev.Author = "user"
+		ev.LLMResponse = model.LLMResponse{
+			Content: genai.NewContentFromText(question, genai.RoleUser),
+		}
+		if err := sessionSvc.AppendEvent(t.Context(), created.Session, ev); err != nil {
+			t.Fatalf("append user event: %v", err)
+		}
+	}
+
+	srv := New(Config{
+		AppName:      appName,
+		SessionSvc:   sessionSvc,
+		AuthzChecker: authz.NoOpChecker{},
+	})
+	req := httptest.NewRequest(http.MethodGet, "/v1/sessions", nil)
+	rec := httptest.NewRecorder()
+
+	srv.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	var body struct {
+		Sessions []struct {
+			Title string `json:"title"`
+		} `json:"sessions"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&body); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if len(body.Sessions) != 1 {
+		t.Fatalf("session count = %d, body = %s", len(body.Sessions), rec.Body.String())
+	}
+	const want = "What are the cardiovascular effects of aspirin after STEMI?"
+	if body.Sessions[0].Title != want {
+		t.Fatalf("title = %q, want %q", body.Sessions[0].Title, want)
+	}
+}
 
 func TestPostMessageStreamsDistinctProgressAfterPartialText(t *testing.T) {
 	t.Parallel()

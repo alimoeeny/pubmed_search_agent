@@ -12,6 +12,7 @@ export class ApiError extends Error {
 
 export type SessionSummary = {
   session_id: string
+  title: string
   last_updated: string
 }
 
@@ -25,10 +26,7 @@ export type PostMessageBody =
   | { text: string; function_responses?: never }
   | { function_responses: FunctionResponse[]; text?: never }
 
-async function request<T>(
-  path: string,
-  options: RequestInit & { token?: string },
-): Promise<T> {
+async function request<T>(path: string, options: RequestInit & { token?: string }): Promise<T> {
   const { token, ...init } = options
   const headers = new Headers(init.headers)
   headers.set('Content-Type', 'application/json')
@@ -67,11 +65,7 @@ export function createApiClient(getToken: () => string | undefined) {
       return request(`/v1/sessions/${id}`, { method: 'DELETE', token: token() })
     },
 
-    async postMessage(
-      id: string,
-      body: PostMessageBody,
-      signal: AbortSignal,
-    ): Promise<Response> {
+    async postMessage(id: string, body: PostMessageBody, signal: AbortSignal): Promise<Response> {
       const headers: Record<string, string> = { 'Content-Type': 'application/json' }
       const t = token()
       if (t) headers['Authorization'] = `Bearer ${t}`

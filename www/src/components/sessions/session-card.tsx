@@ -31,6 +31,7 @@ export function SessionCard({ session }: { session: SessionSummary }) {
   const { mutate: deleteSession, isPending } = useDeleteSession()
 
   const shortId = session.session_id.slice(-8)
+  const title = session.title.trim() || 'New research session'
 
   const handleDelete = () => {
     deleteSession(session.session_id, {
@@ -48,14 +49,18 @@ export function SessionCard({ session }: { session: SessionSummary }) {
         className="group/session-card cursor-pointer transition-shadow hover:ring-2 hover:ring-ring"
         onClick={() => navigate(`/sessions/${session.session_id}`)}
       >
-        <CardContent className="flex items-center justify-between gap-3 py-4">
-          <div className="flex items-center gap-3 min-w-0">
+        <CardContent className="flex min-h-24 items-start justify-between gap-3 py-4">
+          <div className="flex min-w-0 items-start gap-3">
             <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/10">
               <MessageSquare className="size-4 text-primary" />
             </div>
             <div className="min-w-0">
-              <p className="font-mono text-sm font-medium">…{shortId}</p>
-              <p className="text-xs text-muted-foreground">{formatRelative(session.last_updated)}</p>
+              <p className="line-clamp-2 text-sm font-medium leading-5">{title}</p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                {formatRelative(session.last_updated)}
+                <span aria-hidden="true"> · </span>
+                <span className="font-mono">…{shortId}</span>
+              </p>
             </div>
           </div>
           <Button
